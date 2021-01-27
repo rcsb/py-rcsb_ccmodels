@@ -58,6 +58,7 @@ def main():
     #
     try:
         pyLib = args.python_lib_path if args.python_lib_path else os.path.join(os.environ["PYENV_ROOT"], "versions", "3.7.9", "lib")
+        pyRoot = os.path.basename(pyLib)
         pyVer = args.python_version if args.python_version else "3.7"
         csdHome = args.csdhome if args.csdhome else os.environ["CSDHOME"]
         #
@@ -106,7 +107,7 @@ def main():
             logger.info("Generated %d search files using prefix %r", numMols, prefix)
 
         if doSearch:
-            ccms = ChemCompModelSearch(cachePath=cachePath, pythonRootPath=pyLib, csdHome=csdHome, prefix=prefix)
+            ccms = ChemCompModelSearch(cachePath=cachePath, pythonRootPath=pyRoot, csdHome=csdHome, prefix=prefix)
             rL = ccms.search(searchType, updateOnly=updateOnly, numProc=numProc, chunkSize=chunkSize)
             logger.info("Search success count %d", len(rL))
 
