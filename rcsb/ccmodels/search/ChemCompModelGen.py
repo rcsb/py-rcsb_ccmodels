@@ -5,6 +5,7 @@
 # Version: 0.001
 #
 # Updated:
+#  27-Jan-2021 jdw add __checkCif() and __checkOeMol() to filter molecules not subject to search
 ##
 """
 Generate searchable source files for chemical component model workflow.
@@ -40,6 +41,7 @@ class ChemCompModelGen(object):
 
     def buildSearchFiles(self, **kwargs):
         """Build cif, sdf (optional), and mol2 files for components in the chemical component search index.
+           Exclude ions or other extraneous molecules lacking bonds.
 
         Args:
             ccUrlTarget (str): locator for source chemical component dictionary (default: full public dictionary)
@@ -115,9 +117,16 @@ class ChemCompModelGen(object):
                 cifPath = os.path.join(searchFileDirPath, ccId[0], ccId, ccId + ".cif")
                 if not (useCache and mU.exists(cifPath)):
                     ccMol = ccmP.getMol(ccId)
+                    if not self.__checkCif(ccMol):
+                        continue
                     mU.doExport(cifPath, [ccMol], fmt="mmcif")
             #
             oeMol = oesmp.getMol(sId)
+            if not self.__checkOeMol(oeMol):
+                continue
+            #
+            # Sanity checks on the generated OE molecule
+            #
             cifPath = os.path.join(searchFileDirPath, ccId[0], ccId, sId + ".cif")
             if sId != ccId and not (useCache and mU.exists(cifPath)):
                 oeccU = OeChemCompUtils()
@@ -137,3 +146,54 @@ class ChemCompModelGen(object):
             numMols += 1
             #
         return numMols
+
+    def __checkOeMol(self, oeMol):
+        """Test if input OEmol is sufficiently complete to be included as a search target.
+
+        Args:
+            oeMol (obj): OE molecule object
+
+        Returns:
+           (bool): True for success or False otherwise
+
+        """
+        numAtoms = numBonds = 0
+        # Contains multiple atoms -
+        try:
+            numAtoms = oeMol.NumAtoms()
+        except Exception:
+            return False
+
+        # Contains bonds -
+        try:
+            numBonds = oeMol.NumBonds()
+        except Exception:
+            return False
+
+        return numAtoms > 1 and numBonds > 0
+
+    def __checkCif(self, dataContainer):
+        """Test if input CIF is sufficiently complete to be included as a search target.
+
+        Args:
+            dataContainer (obj): data container holding chemical component definition
+
+        Returns:
+           (bool): True for success or False otherwise
+
+        """
+        # Contains > 1 atoms -
+        try:
+            cObj = dataContainer.getObj("chem_comp_atom")
+            numAtoms = cObj.getRowCount()
+        except Exception:
+            return False
+
+        # Contains > 0 bonds -
+        try:
+            cObj = dataContainer.getObj("chem_comp_bond")
+            numBonds = cObj.getRowCount()
+        except Exception:
+            return False
+
+        return numAtoms > 1 and numBonds > 0

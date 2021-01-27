@@ -1,7 +1,6 @@
 .idea/
+.env
 .vscode/
-# keep this file
-# .env/
 test-output/
 !test-output/.gitkeep
 CACHE/

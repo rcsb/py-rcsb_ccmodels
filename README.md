@@ -57,7 +57,7 @@ pip install -e .
 #
 
 # Install the workflow utilities
-git clone --recurse-submodules https://github.com/rcsb/py-rcsb_ccmodules.git
+git clone --recurse-submodules https://github.com/rcsb/py-rcsb_ccmodels.git
 cd py-rcsb_ccmodels
 pip install -r requirements
 pip install -e .
