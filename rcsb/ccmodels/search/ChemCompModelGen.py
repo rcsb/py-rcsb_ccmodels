@@ -39,6 +39,10 @@ class ChemCompModelGen(object):
         dN = "cc-%s-search-files" % self.__prefix if self.__prefix else "cc-search-files"
         return os.path.join(self.__cachePath, dN)
 
+    def getIndexFilePath(self):
+        dN = "cc-%s-search-files" % self.__prefix if self.__prefix else "cc-search-files"
+        return os.path.join(self.__cachePath, dN, "search-file-index.json")
+
     def buildSearchFiles(self, **kwargs):
         """Build cif, sdf (optional), and mol2 files for components in the chemical component search index.
            Exclude ions or other extraneous molecules lacking bonds.
@@ -68,7 +72,7 @@ class ChemCompModelGen(object):
         minCount = kwargs.get("minCount", 0)
         useCache = kwargs.get("useCache", True)
         useSdf = kwargs.get("useSdf", True)
-        useMol2 = kwargs.get("useSdf", False)
+        useMol2 = kwargs.get("useMol2", False)
         limitPerceptions = kwargs.get("limitPerceptions", False)
         logSizes = False
         #
@@ -110,6 +114,7 @@ class ChemCompModelGen(object):
         oeU = OeIoUtils(dirPath=cachePath)
         numMols = 0
         searchFileDirPath = self.getSearchDirFilePath()
+        pathTupList = []
         for sId in ccSIdx:
             ccId = sId.split("|")[0]
             # standard CIF definition
@@ -137,15 +142,40 @@ class ChemCompModelGen(object):
             if useSdf:
                 molFilePath = os.path.join(searchFileDirPath, ccId[0], ccId, sId + ".sdf")
                 if not (useCache and mU.exists(molFilePath)):
-                    oeU.write(molFilePath, oeMol, constantMol=False, addSdTags=True)
+                    ok = oeU.write(molFilePath, oeMol, constantMol=False, addSdTags=True)
+                    if ok:
+                        pathTupList.append((sId, molFilePath, "sdf"))
             #
             if useMol2:
                 mol2FilePath = os.path.join(searchFileDirPath, ccId[0], ccId, sId + ".mol2")
                 if not (useCache and mU.exists(mol2FilePath)):
                     oeU.write(mol2FilePath, oeMol, constantMol=False, addSdTags=True)
+                    if ok:
+                        pathTupList.append((sId, mol2FilePath, "mol2"))
             numMols += 1
-            #
+        #
+        self.__storePathList(pathTupList)
         return numMols
+
+    def fetchPathList(self):
+        pathList = []
+        fp = self.getIndexFilePath()
+        try:
+            mU = MarshalUtil()
+            pathList = mU.doImport(fp, fmt="json")
+        except Exception as e:
+            logger.info("Failing for %r with %s", fp, str(e))
+        return pathList
+
+    def __storePathList(self, pathList):
+        ok = False
+        fp = self.getIndexFilePath()
+        try:
+            mU = MarshalUtil()
+            ok = mU.doExport(fp, pathList, fmt="json", indent=3)
+        except Exception as e:
+            logger.info("Failing for %r with %s", fp, str(e))
+        return ok
 
     def __checkOeMol(self, oeMol):
         """Test if input OEmol is sufficiently complete to be included as a search target.

@@ -60,14 +60,15 @@ class ChemCompModelSearch(object):
         try:
             resultDirPath = self.getResultDirFilePath()
             ccmg = ChemCompModelGen(self.__cachePath, prefix=self.__prefix)
-            sourceSearchDirPath = ccmg.getSearchDirFilePath()
-            sTupL = self.__getSearchPathList(sourceSearchDirPath, fileType=fileType)
+            # sourceSearchDirPath = ccmg.getSearchDirFilePath()
+            sTupL = ccmg.fetchPathList()
+            # sTupL = self.__getSearchPathListGlob(sourceSearchDirPath, fileType=fileType)
             if updateOnly:
                 rD = self.getResultIndex()
-                pL = [sTup[1] for sTup in sTupL if sTup[0] not in rD]
+                pL = [sTup[1] for sTup in sTupL if sTup[0] not in rD and sTup[2] == fileType]
                 logger.info("Updated search list length %d", len(pL))
             else:
-                pL = [sTup[1] for sTup in sTupL]
+                pL = [sTup[1] for sTup in sTupL if sTup[2] == fileType]
 
             if pL:
                 csmp = CcdcSearchExecMp(pythonRootPath=self.__pythonRootPath, csdHome=self.__csdHome)
@@ -106,8 +107,8 @@ class ChemCompModelSearch(object):
             logger.exception("Failing with %s", str(e))
         return rD
 
-    def __getSearchPathList(self, sourceSearchDirPath, fileType="sdf"):
-        """Return the path list of mol2 files in the input path
+    def __getSearchPathListGlob(self, sourceSearchDirPath, fileType="sdf"):
+        """Return the path list of mol files in the input path
 
         Args:
             sourceSearchDirPath (str): directory containing searchable files
