@@ -4,3 +4,4 @@
 27-Jan-2021 - V0.11 Update linux configuration and add exclusion filters in ChemCompModelGen()
 27-Jan-2021 - V0.12 Python path adjustments in ChemCompModelExec()
 27-Jan-2021 - V0.13 Make an index of the search files and avoid a file system glob search.
+31-Jan-2021 - V0.14 Create models for protomeric matches with unmapped protons, multiprocess model build workflow

@@ -15,10 +15,12 @@ __author__ = "John Westbrook"
 __email__ = "john.westbrook@rcsb.org"
 __license__ = "Apache 2.0"
 
+import copy
 import datetime
 import logging
 import os
 import time
+from collections import namedtuple
 
 from mmcif.api.DataCategory import DataCategory
 from mmcif.api.PdbxContainers import DataContainer
@@ -30,161 +32,125 @@ from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignMultiPage
 from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignPage
 from rcsb.utils.io.IndexUtils import CcdcMatchIndex
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 
 logger = logging.getLogger(__name__)
 
+ComponentAtomDetails = namedtuple("ComponentAtomDetails", "atIdx atNo atName atType x y z atFormalCharge")
+AlignAtomMap = namedtuple("AlignAtomMap", "refId refAtIdx refAtNo refAtName fitId fitAtIdx fitAtNo fitAtName")
+AlignAtomUnMapped = namedtuple("AlignAtomUnMapped", "fitId fitAtIdx fitAtNo fitAtType fitAtName fitAtFormalCharge x y z fitNeighbors")
 
-class ChemCompModelBuild(object):
-    def __init__(self, cachePath, prefix=None):
-        self.__cachePath = cachePath
 
-        self.__prefix = prefix
-        startTime = time.time()
-        useCache = True
-        ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc"
-        self.__ccSIdxP = ChemCompSearchIndexProvider(cachePath=cachePath, useCache=useCache, ccFileNamePrefix=ccFileNamePrefix)
-        ok = self.__ccSIdxP.testCache()
-        logger.info("Completed chemical component search index load %r (%.4f seconds)", ok, time.time() - startTime)
-        #
-        self.__startTime = time.time()
-        logger.info("Starting search (%s) at %s", __version__, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
+class ChemCompModelBuildWorker(object):
+    def __init__(self, verbose=True):
+        self.__verbose = verbose
+        self.__ccSIdxP = None
 
-    def getModelDirFilePath(self):
-        dN = "cc-%s-model-files" % self.__prefix if self.__prefix else "cc-model-files"
-        return os.path.join(self.__cachePath, dN)
-
-    def getModelImageDirFilePath(self):
-        dN = "cc-%s-model-image" % self.__prefix if self.__prefix else "cc-model-images"
-        return os.path.join(self.__cachePath, dN)
-
-    def build(self, alignType="relaxed-stereo"):
-        """Run the model build step in the chemical component model workflow.
+    def build(self, dataList, procName, optionsD, workingDir):
+        """Worker method to build chemical component model for the input search result path list.
 
         Args:
-          alignType (str):  "relaxed"|"strict"| relaxed-stereo".  Default: relaxed-stereo
+            dataList (list): list of search result paths
+            procName (str): processName
+            optionsD (dict): dictionary of options
+            workingDir (str): path to working directory (not used)
 
         Returns:
-            (dict): {searchId: [{"targetId": , "modelId": , "modelPath": ,"matchId": , "parentId": , "rFactor": , }]
-
+            (successList, resultList, []): success and result lists
         """
-        retD = {}
-        try:
-            ccms = ChemCompModelSearch(self.__cachePath, None, None, prefix=self.__prefix)
-            modelDirPath = self.getModelDirFilePath()
-            imageDirPath = self.getModelImageDirFilePath()
+        _ = workingDir
+        resultList = []
+        successList = []
+        #
+        alignType = optionsD["alignType"]
+        modelDirPath = optionsD["modelDirPath"]
+        imageDirPath = optionsD["imageDirPath"]
+        self.__ccSIdxP = optionsD["ccSIdxP"]
+        #
+        startTime = time.time()
+        logger.info("starting %s at %s", procName, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
+        #
+        parentD = {}
+        for idxPath in dataList:
+            fn = os.path.basename(idxPath)
+            sId = fn.replace("-index.json", "")
+            logger.info("")
+            logger.info("======== ============ ============ =========== ============ ===============")
+            parentId = sId.split("|")[0]
+
+            logger.info("Start model build for search Id (%s) %s", parentId, sId)
             #
-            idxPathD = ccms.getResultIndex()
-            logger.info("Result index length ridxD (%d)", len(idxPathD))
-            parentD = {}
-            for sId, idxPath in idxPathD.items():
-                logger.info("")
-                logger.info("======== ============ ============ =========== ============ ===============")
-                parentId = sId.split("|")[0]
-
-                logger.info("Start model build for search Id (%s) %s", parentId, sId)
+            matchObjIt = CcdcMatchIndex(indexFilePath=idxPath)
+            matchObjIt.sort()
+            pairList = []
+            startingModel = 1
+            for matchObj in matchObjIt:
+                targetCifPath = matchObj.getTargetCcPath()
+                fitMolFilePath = matchObj.getMol2Path()
+                matchId = matchObj.getIdentifier()
+                targetId = matchObj.getTargetId()
+                matchTitle = "CCDC Code  " + matchId
+                ccTitle = "Chemical Component " + targetId
                 #
-                matchObjIt = CcdcMatchIndex(indexFilePath=idxPath)
-                matchObjIt.sort()
-                pairList = []
-                startingModel = 1
-                for matchObj in matchObjIt:
-                    targetCifPath = matchObj.getTargetCcPath()
-                    fitMolFilePath = matchObj.getMol2Path()
-                    matchId = matchObj.getIdentifier()
-                    targetId = matchObj.getTargetId()
-                    matchTitle = "CCDC Code  " + matchId
-                    ccTitle = "Chemical Component " + targetId
-                    #
-                    nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomExtraTupL = self.__alignModelSubStruct(
-                        targetCifPath, fitMolFilePath, alignType=alignType, fitTitle=matchId, refTitle=targetId, verbose=False
-                    )
-                    logger.debug(
-                        ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomExtraL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomExtraTupL)
-                    )
-                    # All reference atoms must match -
-                    if nAtomsRef == 0 or nAtomsFit == 0 or nAtomsRef != len(fitXyzMapD):
-                        logger.debug("     ----- Rejecting (incomplete/mismatch) ref %s with matchId %s", targetId, matchId)
-                        continue
-                    # Check for the case of extra protons ...
-                    fitOk = True
-                    if fitAtomExtraTupL:
-                        for fitAtomExtraTup in fitAtomExtraTupL:
-                            if fitAtomExtraTup[1] != 1:
-                                fitOk = False
-                                break
-                    #
-                    if not fitOk:
-                        logger.debug("     ----- Rejecting (extra fit bits) ref %s with matchId %s", targetId, matchId)
-                        continue
-                    #
-                    if refFD["SMILES_STEREO"] != fitFD["SMILES_STEREO"]:
-                        logger.info("SMILES mismatch")
-                        logger.info("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
-                        logger.info("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
-                        continue
-                    # --------- ----------------
-                    #  Accept the match
-                    # --------- ----------------
-                    matchId = matchObj.getIdentifier()
-                    targetId = matchObj.getTargetId()
-                    parentD.setdefault(parentId, []).append(matchId)
-                    #
-                    refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
-                    refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
-                    self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
-                    # --------- ------------------
-                    pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
-
-                    modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, startingModelNum=startingModel, maxModels=200)
-                    ok = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, matchObj, modelId, modelPath)
-                    startingModel += 1
-                    if ok:
-                        retD.setdefault(sId, []).append(
-                            {
-                                "modelId": modelId,
-                                "searchId": targetId,
-                                "parentId": parentId,
-                                "matchId": matchId,
-                                "modelPath": modelPath,
-                                "rFactor": matchObj.getRFactor(),
-                                "hasDisorder": matchObj.getHasDisorder(),
-                            }
-                        )
+                nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL = self.__alignModelSubStruct(
+                    targetCifPath, fitMolFilePath, alignType=alignType, fitTitle=matchId, refTitle=targetId, verbose=False
+                )
+                logger.debug(
+                    ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
+                )
+                # -----
+                smilesMatch = refFD["SMILES_STEREO"] == fitFD["SMILES_STEREO"]
+                hasUnMapped = len(fitAtomUnMappedL) > 0
+                unMappedOk = self.__testUnMappedProtonation(fitAtomUnMappedL)
                 #
-                if pairList:
-                    pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
-                    self.__depictFitList(sId, pdfImagePath, pairList, alignType=alignType)
-                if retD:
-                    logger.info("Built %d models for %s", len(retD), sId)
-                else:
-                    logger.info("No models built for %s", sId)
-            ok = self.storeModelIndex(retD)
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        return retD
+                if not ((nAtomsRef <= len(fitXyzMapD) and hasUnMapped and unMappedOk) or (nAtomsRef == len(fitXyzMapD) and smilesMatch)):
+                    continue
+                #
+                if hasUnMapped and not smilesMatch:
+                    logger.info("SMILES differ for match with unmapped protons")
+                    logger.info("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
+                    logger.info("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
+                # --------- ----------------
+                #  Accept the match
+                # --------- ----------------
+                matchId = matchObj.getIdentifier()
+                targetId = matchObj.getTargetId()
+                parentD.setdefault(parentId, []).append(matchId)
+                #
+                refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
+                refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
+                self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
+                # --------- ------------------
+                pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
 
-    def __getModelIndexPath(self):
-        return os.path.join(self.getModelDirFilePath(), "model-index.json")
+                modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, startingModelNum=startingModel, maxModels=200)
+                ok = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
+                startingModel += 1
+                if ok:
+                    resultList.append(
+                        {
+                            "modelId": modelId,
+                            "searchId": targetId,
+                            "parentId": parentId,
+                            "matchId": matchId,
+                            "modelPath": modelPath,
+                            "rFactor": matchObj.getRFactor(),
+                            "hasDisorder": matchObj.getHasDisorder(),
+                        }
+                    )
+            #
+            if pairList:
+                pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
+                self.__depictFitList(sId, pdfImagePath, pairList, alignType=alignType)
+            if resultList:
+                logger.info("Built %d models for %s", len(resultList), sId)
+                successList.append(idxPath)
+            else:
+                logger.info("No models built for %s", sId)
 
-    def fetchModelIndex(self):
-        mD = {}
-        try:
-            mU = MarshalUtil()
-            fp = self.__getModelIndexPath()
-            mD = mU.doImport(fp, fmt="json")
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        return mD
-
-    def storeModelIndex(self, mD):
-        try:
-            mU = MarshalUtil()
-            fp = self.__getModelIndexPath()
-            ok = mU.doExport(fp, mD, fmt="json", indent=3)
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-            ok = False
-        return ok
+        endTime = time.time()
+        logger.info("%s (result length %d) completed at %s (%.2f seconds)", procName, len(resultList), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - startTime)
+        return resultList, resultList, []
 
     def __getBuildVariant(self, sId):
         """Lookup the build type from the input chemical component search index Id.
@@ -193,13 +159,13 @@ class ChemCompModelBuild(object):
             sId (str): chemical component search index Id
 
         Returns:
-            str : "tautomer" | ""
+            str : "tautomer_protomer" | ""
         """
         sidxD = self.__ccSIdxP.getIndexEntry(sId)
         if "protomer" in sidxD["build-type"]:
-            return "tautomer"
+            return "tautomer_protomer"
         if "tautomer" in sidxD["build-type"]:
-            return "tautomer"
+            return "tautomer_protomer"
         return ""
 
     def __alignModelMcss(self, ccRefPath, molFitPath, alignType="exact", fitTitle=None, refTitle=None, unique=False, minFrac=0.9, verbose=False):
@@ -221,10 +187,10 @@ class ChemCompModelBuild(object):
                         number of atoms in fit molecule,
                         fit molecule feature dictionary  {"Formula": , "SMILES": , "SMILES_STEREO": , "InChI": , "InChIKey":, 'xyz': }
                         atomMapD {refAtName: (fit x, fit y, fit z)}
-                        fitAtomExtraL: [(atName, atomicNumber),(), ...]
+                        fitAtomUnMappedL: [(atName, atomicNumber),(), ...]
                     )
 
-            Note: 'xyz': [(ii, atm.GetIdx(), atm.GetAtomicNum(), atm.GetName(), atm.GetType(), fitX, fitY, fitZ))
+            Note: 'xyz': [ComponentAtomDetails()]
         """
         try:
             logger.debug("Align target cc %s with matching model %s", ccRefPath, molFitPath)
@@ -232,17 +198,17 @@ class ChemCompModelBuild(object):
             oesU.setSearchType(sType=alignType)
             oesU.setRefPath(ccPath=ccRefPath, title=refTitle)
             oesU.setFitPath(molFitPath, title=fitTitle, suppressHydrogens=False, fType="sdf", importType="3D")
-            (nAtomsRef, refFD, nAtomsFit, fitFD, atomMapL, fitAtomExtraL) = oesU.doAlignMcss(unique=unique, minFrac=minFrac)
+            (nAtomsRef, refFD, nAtomsFit, fitFD, atomMapL, fitAtomUnMappedL) = oesU.doAlignMcss(unique=unique, minFrac=minFrac)
             # -----
-            # fitFD['xyz']: [(ii, atm.GetIdx(), atm.GetAtomicNum(), atm.GetName(), atm.GetType(), x, y, z))
-            #
             # tD = {refAtName: fitAtIdx, ...}
-            tD = {tup[3]: tup[5] for tup in atomMapL}
-            # fitXyzD  = {atIdx: (x,y,z), (x,y,z), ..}
-            fitXyzD = {tup[1]: (tup[5], tup[6], tup[7]) for tup in fitFD["xyz"]}
+            tD = {tup.refAtName: tup.fitAtIdx for tup in atomMapL}
+            #
+            # fitFD['xyz']: [ComponentAtomDetails()]
+            # fitXyzD  = {atIdx1: ComponentAtomDetails(), atIdx2: ComponentAtomDetails(), ...}
+            fitXyzD = {tup.atIdx: tup for tup in fitFD["xyz"]}
             atomMapD = {atName: fitXyzD[fitAtIdx] for atName, fitAtIdx in tD.items() if fitAtIdx in fitXyzD}
             # -----
-            return nAtomsRef, refFD, nAtomsFit, fitFD, atomMapD, fitAtomExtraL
+            return nAtomsRef, refFD, nAtomsFit, fitFD, atomMapD, fitAtomUnMappedL
         except Exception as e:
             logger.exception("Failing for %r and %r with %s", ccRefPath, molFitPath, str(e))
         return 0, {}, 0, {}, {}, []
@@ -264,10 +230,10 @@ class ChemCompModelBuild(object):
                         number of atoms in fit molecule,
                         fit molecule feature dictionary  {"Formula": , "SMILES": , "SMILES_STEREO": , "InChI": , "InChIKey":, 'xyz': }
                         atomMapD {refAtName: (fit x, fit y, fit z)}
-                        fitAtomExtraL: [(atName, atomicNumber),(), ...]
+                        fitAtomUnMappedL: [(atName, atomicNumber),(), ...]
                     )
 
-            Note: 'xyz': [(ii, atm.GetIdx(), atm.GetAtomicNum(), atm.GetName(), atm.GetType(), fitX, fitY, fitZ))
+            Note: 'xyz': [ComponentAtomDetails()]
         """
         try:
             logger.debug("Align target cc %s with matching model %s", ccRefPath, molFitPath)
@@ -275,17 +241,17 @@ class ChemCompModelBuild(object):
             oesU.setSearchType(sType=alignType)
             oesU.setRefPath(ccPath=ccRefPath, title=refTitle)
             oesU.setFitPath(molFitPath, title=fitTitle, suppressHydrogens=False, fType="sdf", importType="3D")
-            (nAtomsRef, refFD, nAtomsFit, fitFD, atomMapL, fitAtomExtraL) = oesU.doAlignSs(unique=False)
+            (nAtomsRef, refFD, nAtomsFit, fitFD, atomMapL, fitAtomUnMappedL) = oesU.doAlignSs(unique=False)
             # -----
-            # fitFD['xyz']: [(ii, atm.GetIdx(), atm.GetAtomicNum(), atm.GetName(), atm.GetType(), x, y, z))
-            #
             # tD = {refAtName: fitAtIdx, ...}
-            tD = {tup[3]: tup[5] for tup in atomMapL}
-            # fitXyzD  = {atIdx: (x,y,z), (x,y,z), ..}
-            fitXyzD = {tup[1]: (tup[5], tup[6], tup[7]) for tup in fitFD["xyz"]}
-            atomMapD = {atName: fitXyzD[fitAtIdx] for atName, fitAtIdx in tD.items() if fitAtIdx in fitXyzD}
+            tD = {tup.refAtName: tup.fitAtIdx for tup in atomMapL}
+            #
+            # fitFD['xyz']: [ComponentAtomDetails()]
+            # fitXyzD  = {atIdx1: ComponentAtomDetails(), atIdx2: ComponentAtomDetails(), ...}
+            fitXyzD = {tup.atIdx: tup for tup in fitFD["xyz"]}
+            atomMapD = {refAtName: fitXyzD[fitAtIdx] for refAtName, fitAtIdx in tD.items() if fitAtIdx in fitXyzD}
             # -----
-            return nAtomsRef, refFD, nAtomsFit, fitFD, atomMapD, fitAtomExtraL
+            return nAtomsRef, refFD, nAtomsFit, fitFD, atomMapD, fitAtomUnMappedL
         except Exception as e:
             logger.exception("Failing for %r and %r with %s", ccRefPath, molFitPath, str(e))
         return 0, {}, 0, {}, {}, []
@@ -405,18 +371,66 @@ class ChemCompModelBuild(object):
         modelId = "M_" + parentId + "_%05d" % modelNum
         return modelId
 
-    def __writeModel(self, targetId, targetPath, fitFD, fitXyzD, matchObj, modelId, modelPath):
+    def __getToday(self):
+        """Return a CIF style date-timestamp value for current local time -"""
+        today = datetime.datetime.today()
+        # format ="%Y-%m-%d:%H:%M"
+        fmt = "%Y-%m-%d"
+        return str(today.strftime(fmt))
+
+    def __testUnMappedProtonation(self, fitAtomUnMappedL):
+        # Check for the case of extra protons ...
+        try:
+            fitOk = True
+            if fitAtomUnMappedL:
+                for atU in fitAtomUnMappedL:
+                    if atU.fitAtNo != 1:
+                        fitOk = False
+                        break
+            return fitOk
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return False
+
+    def __writeModel(self, targetId, targetPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath):
         """Write the chemical component model for the input chemical component Id and associated atom mapping and
         feature details --
 
+            ComponentAtomDetails = namedtuple("ComponentAtomDetails", "index atNo name aType x y z fCharge")
+            AlignAtomMap = namedtuple("AlignAtomMap", "refId refAtIdx refAtNo refAtName fitId fitAtIdx fitAtNo fitAtName")
+            AlignAtomUnMapped = namedtuple("AlignAtomUnMapped", "fitId fitAtIdx fitAtNo fitAtType fitAtName fitAtFormalCharge x y z fitNeighbors")
         """
         try:
+            hAtomPrefix = "HEX"
+            variantType = self.__getBuildVariant(targetId)
+            # Check for the common
+            if not self.__testUnMappedProtonation(fitAtomUnMappedL):
+                return False
+            # Get atom partners
+            fitAtMapD = {}
+            for refAtName, fAtTup in fitXyzMapD.items():
+                fitAtMapD[fAtTup.atName] = refAtName
+            if fitAtomUnMappedL:
+                #  Check if neighbors are all mapped
+                ok = True
+                for fitUnTup in fitAtomUnMappedL:
+                    for nAtName in fitUnTup.fitNeighbors:
+                        if nAtName not in fitAtMapD:
+                            ok = False
+                            break
+                if not ok:
+                    return False
+                else:
+                    logger.info("%s match has unmapped protonation", modelId)
+                    variantType = "tautomer_protomer"
+            #
+            #
             kList = ["xyz", "SMILES", "SMILES_STEREO", "InChI", "InChIKey"]
             for k in kList:
                 if k not in fitFD:
                     logger.error("Fit feature dictionary for %s missing key %s", targetId, k)
                     return False
-            #
+            # ------------
             dataContainer = DataContainer(modelId)
             #
             mU = MarshalUtil()
@@ -453,17 +467,31 @@ class ChemCompModelBuild(object):
             for ii in range(cObj.getRowCount()):
                 atName = cObj.getValue("atom_id", ii)
                 atType = cObj.getValue("type_symbol", ii)
-                fCharge = cObj.getValue("charge", ii)
+                # fCharge = cObj.getValue("charge", ii)
                 #
-                fitXyz = fitXyzD[atName]
-                # --------  ---------
                 wObj.setValue(modelId, "model_id", ii)
                 wObj.setValue(atName, "atom_id", ii)
                 wObj.setValue(atType, "type_symbol", ii)
-                wObj.setValue(fCharge, "charge", ii)
-                wObj.setValue("%.4f" % fitXyz[0], "model_Cartn_x", ii)
-                wObj.setValue("%.4f" % fitXyz[1], "model_Cartn_y", ii)
-                wObj.setValue("%.4f" % fitXyz[2], "model_Cartn_z", ii)
+                #
+                fitXyz = fitXyzMapD[atName]
+                wObj.setValue(fitXyz.atFormalCharge, "charge", ii)
+                wObj.setValue("%.4f" % fitXyz.x, "model_Cartn_x", ii)
+                wObj.setValue("%.4f" % fitXyz.y, "model_Cartn_y", ii)
+                wObj.setValue("%.4f" % fitXyz.z, "model_Cartn_z", ii)
+                wObj.setValue(ii + 1, "ordinal_id", ii)
+            #
+            # Add the unmapped atoms ...
+            # AlignAtomUnMapped = namedtuple("AlignAtomUnMapped", "fitId fitAtIdx fitAtNo fitAtType fitAtName fitNeighbors")
+            ii = wObj.getRowCount()
+            for jj, uTup in enumerate(fitAtomUnMappedL):
+                refAtomName = hAtomPrefix + str(jj)
+                wObj.setValue(modelId, "model_id", ii)
+                wObj.setValue(refAtomName, "atom_id", ii)
+                wObj.setValue(uTup.fitAtType, "type_symbol", ii)
+                wObj.setValue(uTup.fitAtFormalCharge, "charge", ii)
+                wObj.setValue("%.4f" % uTup.x, "model_Cartn_x", ii)
+                wObj.setValue("%.4f" % uTup.y, "model_Cartn_y", ii)
+                wObj.setValue("%.4f" % uTup.z, "model_Cartn_z", ii)
                 wObj.setValue(ii + 1, "ordinal_id", ii)
             # --------  ---------
             catName = "pdbx_chem_comp_model_bond"
@@ -483,6 +511,18 @@ class ChemCompModelBuild(object):
                 wObj.setValue(at2, "atom_id_2", ii)
                 wObj.setValue(bType, "value_order", ii)
                 wObj.setValue(ii + 1, "ordinal_id", ii)
+            #
+            ii = wObj.getRowCount()
+            for jj, uTup in enumerate(fitAtomUnMappedL):
+                at1 = hAtomPrefix + str(jj)
+                for nAt in uTup.fitNeighbors:
+                    at2 = fitAtMapD[nAt]
+                    wObj.setValue(modelId, "model_id", ii)
+                    wObj.setValue(at1, "atom_id_1", ii)
+                    wObj.setValue(at2, "atom_id_2", ii)
+                    wObj.setValue("SING", "value_order", ii)
+                    wObj.setValue(ii + 1, "ordinal_id", ii)
+
             # --------  ---------
             catName = "pdbx_chem_comp_model_descriptor"
             if not dataContainer.exists(catName):
@@ -568,10 +608,10 @@ class ChemCompModelBuild(object):
                         wObj.setValue("Y", "feature_value", ii)
                         ii += 1
             #
-            bType = self.__getBuildVariant(targetId)
-            if bType:
+
+            if variantType:
                 wObj.setValue(modelId, "model_id", ii)
-                wObj.setValue(bType + "_match", "feature_name", ii)
+                wObj.setValue(variantType + "_match", "feature_name", ii)
                 wObj.setValue("Y", "feature_value", ii)
                 ii += 1
 
@@ -595,9 +635,94 @@ class ChemCompModelBuild(object):
             logger.exception("Failing for %r %r with %s", targetId, targetPath, str(e))
         return False
 
-    def __getToday(self):
-        """Return a CIF style date-timestamp value for current local time -"""
-        today = datetime.datetime.today()
-        # format ="%Y-%m-%d:%H:%M"
-        fmt = "%Y-%m-%d"
-        return str(today.strftime(fmt))
+
+class ChemCompModelBuild(object):
+    def __init__(self, cachePath, prefix=None):
+        self.__cachePath = cachePath
+
+        self.__prefix = prefix
+        startTime = time.time()
+        useCache = True
+        ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc"
+        self.__ccSIdxP = ChemCompSearchIndexProvider(cachePath=cachePath, useCache=useCache, ccFileNamePrefix=ccFileNamePrefix)
+        ok = self.__ccSIdxP.testCache()
+        logger.info("Completed chemical component search index load %r (%.4f seconds)", ok, time.time() - startTime)
+        #
+        self.__startTime = time.time()
+        logger.info("Starting search (%s) at %s", __version__, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
+
+    def getModelDirFilePath(self):
+        dN = "cc-%s-model-files" % self.__prefix if self.__prefix else "cc-model-files"
+        return os.path.join(self.__cachePath, dN)
+
+    def getModelImageDirFilePath(self):
+        dN = "cc-%s-model-image" % self.__prefix if self.__prefix else "cc-model-images"
+        return os.path.join(self.__cachePath, dN)
+
+    def fetchModelIndex(self):
+        mD = {}
+        try:
+            mU = MarshalUtil()
+            fp = self.__getModelIndexPath()
+            mD = mU.doImport(fp, fmt="json")
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return mD
+
+    def storeModelIndex(self, mD):
+        try:
+            mU = MarshalUtil()
+            fp = self.__getModelIndexPath()
+            ok = mU.doExport(fp, mD, fmt="json", indent=3)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+            ok = False
+        return ok
+
+    def __getModelIndexPath(self):
+        return os.path.join(self.getModelDirFilePath(), "model-index.json")
+
+    def build(self, alignType="relaxed-stereo", numProc=4, chunkSize=10):
+        """Run the model build step in the chemical component model workflow.
+
+        Args:
+          alignType (str):  "relaxed"|"strict"| relaxed-stereo".  Default: relaxed-stereo
+          numProc (int, optional): number of processes to invoke. Defaults to 4.
+          chunkSize (int, optional): work chunksize. Defaults to 10.
+          timeOut (int, optional): search timeout Defaults: 120 seconds.
+
+        Returns:
+            (dict): {searchId: [{"targetId": , "modelId": , "modelPath": ,"matchId": , "parentId": , "rFactor": , }]
+
+        """
+        retD = {}
+        try:
+            ccms = ChemCompModelSearch(self.__cachePath, None, None, prefix=self.__prefix)
+            modelDirPath = self.getModelDirFilePath()
+            imageDirPath = self.getModelImageDirFilePath()
+            #
+            idxPathD = ccms.getResultIndex()
+            idxPathL = list(idxPathD.values())
+            logger.info("Result index length ridxD (%d)", len(idxPathD))
+
+            pU = ChemCompModelBuildWorker(verbose=True)
+            mpu = MultiProcUtil(verbose=True)
+            mpu.setWorkingDir(modelDirPath)
+            mpu.setOptions(optionsD={"modelDirPath": modelDirPath, "imageDirPath": imageDirPath, "alignType": alignType, "ccSIdxP": self.__ccSIdxP})
+            #
+            mpu.set(workerObj=pU, workerMethod="build")
+
+            ok, failList, resultList, _ = mpu.runMulti(dataList=idxPathL, numProc=numProc, numResults=1, chunkSize=chunkSize)
+            logger.info("Run ended with status %r success count %d failures %r", ok, len(resultList[0]), len(failList))
+            successList = copy.copy(resultList[0])
+            for tD in successList:
+                retD.setdefault(tD["parentId"], []).append(tD)
+            #
+            if retD:
+                logger.info("Completed build with total %d models", len(retD))
+            else:
+                logger.info("No models built")
+            ok = self.storeModelIndex(retD)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return retD
