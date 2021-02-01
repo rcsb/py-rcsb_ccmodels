@@ -94,10 +94,11 @@ python ChemCompModelExec.py --help
 cc_models_cli --help
 
 usage: cc_models_cli [-h] [--generate] [--cc_locator CC_LOCATOR] [--bird_locator BIRD_LOCATOR]
-                     [--prefix PREFIX] [--cache_path CACHE_PATH] [--use_cache]
+                      [--prefix PREFIX] [--cache_path CACHE_PATH] [--use_cache]
                      [--limit_perceptions] [--search] [--update_only] [--build]
-                     [--csdhome CSDHOME] [--python_lib_path PYTHON_LIB_PATH]
-                     [--python_version PYTHON_VERSION] [--num_proc NUM_PROC] [--chunk_size CHUNK_SIZE]
+                     [--assemble] [--max_r_factor MAX_R_FACTOR] [--csdhome CSDHOME]
+                     [--python_lib_path PYTHON_LIB_PATH] [--python_version PYTHON_VERSION]
+                     [--num_proc NUM_PROC] [--chunk_size CHUNK_SIZE]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -114,6 +115,9 @@ optional arguments:
   --search              Execute CCDC search
   --update_only         Only update current search results
   --build               Build models from CCDC search results
+  --assemble            Assemble models into a concatenated file
+  --max_r_factor MAX_R_FACTOR
+                        Maximum permissible R-value (default=10.0)
   --csdhome CSDHOME     Path to the CSD release (path to CSD_202x)
   --python_lib_path PYTHON_LIB_PATH
                         Path to Python library
@@ -128,8 +132,18 @@ optional arguments:
 An example workflow script would look like the following:
 
 ```bash
+#!/bin/bash
+#
+. ./ccdc-api-env.sh
+echo "Begin search file generation"
+cc_models_cli --generate --num_proc 6 --cache_path ./CACHE
+#
+echo "Begin search workflow"
+cc_models_cli --search --num_proc 4 --cache_path ./CACHE
+#
+echo "Begin build workflow"
+cc_models_cli --build --num_proc 4 --cache_path ./CACHE
 
-cc_models_cli --generate
-cc_models_cli --search
-cc_models_cli --build
+echo "Begin assemble workflow"
+cc_models_cli --assemble --min_r_factor 10.0  --cache_path ./CACHE
 ```
