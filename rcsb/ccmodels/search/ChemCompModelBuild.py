@@ -20,7 +20,8 @@ import datetime
 import logging
 import os
 import time
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+from operator import itemgetter
 
 from mmcif.api.DataCategory import DataCategory
 from mmcif.api.PdbxContainers import DataContainer
@@ -68,22 +69,22 @@ class ChemCompModelBuildWorker(object):
         self.__ccSIdxP = optionsD["ccSIdxP"]
         #
         startTime = time.time()
-        logger.info("starting %s at %s", procName, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
+        logger.info("Starting %s at %s", procName, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
         #
         parentD = {}
+        parentModelCountD = defaultdict(int)
         for idxPath in dataList:
             fn = os.path.basename(idxPath)
             sId = fn.replace("-index.json", "")
-            logger.info("")
-            logger.info("======== ============ ============ =========== ============ ===============")
+            logger.info("%s ======== ============ ============ ", procName)
             parentId = sId.split("|")[0]
 
-            logger.info("Start model build for search Id (%s) %s", parentId, sId)
+            logger.info("%s Start model build for search Id (%s) %s", procName, parentId, sId)
             #
             matchObjIt = CcdcMatchIndex(indexFilePath=idxPath)
             matchObjIt.sort()
             pairList = []
-            startingModel = 1
+
             for matchObj in matchObjIt:
                 targetCifPath = matchObj.getTargetCcPath()
                 fitMolFilePath = matchObj.getMol2Path()
@@ -107,9 +108,9 @@ class ChemCompModelBuildWorker(object):
                     continue
                 #
                 if hasUnMapped and not smilesMatch:
-                    logger.info("SMILES differ for match with unmapped protons")
-                    logger.info("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
-                    logger.info("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
+                    logger.info("%s SMILES differ for match with unmapped protons", procName)
+                    logger.debug("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
+                    logger.debug("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
                 # --------- ----------------
                 #  Accept the match
                 # --------- ----------------
@@ -122,11 +123,11 @@ class ChemCompModelBuildWorker(object):
                 self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
                 # --------- ------------------
                 pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
-
-                modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, startingModelNum=startingModel, maxModels=200)
-                ok = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
-                startingModel += 1
+                modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
+                ok, variantType = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
                 if ok:
+                    parentModelCountD[parentId] += 1
+                    hd = matchObj.getHasDisorder()
                     resultList.append(
                         {
                             "modelId": modelId,
@@ -135,7 +136,8 @@ class ChemCompModelBuildWorker(object):
                             "matchId": matchId,
                             "modelPath": modelPath,
                             "rFactor": matchObj.getRFactor(),
-                            "hasDisorder": matchObj.getHasDisorder(),
+                            "hasDisorder": hd if hd else "N",
+                            "variantType": variantType,
                         }
                     )
             #
@@ -143,14 +145,21 @@ class ChemCompModelBuildWorker(object):
                 pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
                 self.__depictFitList(sId, pdfImagePath, pairList, alignType=alignType)
             if resultList:
-                logger.info("Built %d models for %s", len(resultList), sId)
+                logger.info("%s built %d models for %s (this iteration)", procName, parentModelCountD[parentId], parentId)
                 successList.append(idxPath)
             else:
-                logger.info("No models built for %s", sId)
+                logger.info("%s no models built for %s", procName, sId)
 
         endTime = time.time()
-        logger.info("%s (result length %d) completed at %s (%.2f seconds)", procName, len(resultList), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - startTime)
-        return resultList, resultList, []
+        logger.info(
+            "%s (match successes %d total models this iterations %d) completed at %s (%.2f seconds)",
+            procName,
+            len(successList),
+            len(resultList),
+            time.strftime("%Y %m %d %H:%M:%S", time.localtime()),
+            endTime - startTime,
+        )
+        return successList, resultList, []
 
     def __getBuildVariant(self, sId):
         """Lookup the build type from the input chemical component search index Id.
@@ -368,7 +377,7 @@ class ChemCompModelBuildWorker(object):
         return None, None
 
     def __makeModelId(self, parentId, modelNum=1):
-        modelId = "M_" + parentId + "_%05d" % modelNum
+        modelId = "T_" + parentId + "_%05d" % modelNum
         return modelId
 
     def __getToday(self):
@@ -630,10 +639,10 @@ class ChemCompModelBuildWorker(object):
             # wObj.setValue('?', 'details', ii)
             #
             ok = mU.doExport(modelPath, [dataContainer], fmt="mmcif")
-            return ok
+            return ok, variantType
         except Exception as e:
             logger.exception("Failing for %r %r with %s", targetId, targetPath, str(e))
-        return False
+        return False, ""
 
 
 class ChemCompModelBuild(object):
@@ -719,10 +728,104 @@ class ChemCompModelBuild(object):
                 retD.setdefault(tD["parentId"], []).append(tD)
             #
             if retD:
-                logger.info("Completed build with total %d models", len(retD))
+                logger.info("Completed build with models for %d parent chemical definitions", len(retD))
             else:
                 logger.info("No models built")
             ok = self.storeModelIndex(retD)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return retD
+
+    def assemble(self, maxRFactor=10.0):
+        """Concatenate models into the input file path subject to the R value constraint.
+        Relabel the models sequentially for each parent chemical component.
+
+        Args:
+            assembleModelPath (str): path for concatenated model file
+            maxRFactor (float, optional): limiting R-value. Defaults to 10.0.
+
+        Returns:
+            (bool): True for success or False otherwise
+        """
+        dataContainerL = []
+        mU = MarshalUtil()
+        modelIndexD = self.fetchModelIndex()
+        for _, mDL in modelIndexD.items():
+            mDLS = sorted(mDL, key=itemgetter("rFactor"), reverse=False)
+            # check for non variant matches
+            modelIdSelectL = []
+            for mD in mDLS:
+                if not mD["variantType"]:
+                    modelIdSelectL.append(mD["modelId"])
+            if modelIdSelectL:
+                # cannonical models first -
+                for mD in mDLS:
+                    if mD["modelId"] in modelIdSelectL:
+                        if mD["rFactor"] < maxRFactor:
+                            cL = mU.doImport(mD["modelPath"], fmt="mmcif")
+                            logger.debug("Read %d from %s", len(cL), mD["modelPath"])
+                            dataContainerL.extend(cL)
+                        else:
+                            logger.info("Rejected cannonical model %s", mD["modelId"])
+            else:
+                # then tautomer/protomer models
+                for mD in mDLS:
+                    if mD["rFactor"] < maxRFactor:
+                        cL = mU.doImport(mD["modelPath"], fmt="mmcif")
+                        logger.debug("Read %d from %s", len(cL), mD["modelPath"])
+                        dataContainerL.extend(cL)
+                    else:
+                        logger.info("Rejected variant model %s", mD["modelId"])
+        #
+        fn = "chem_comp_models-%s.cif" % self.__getToday()
+        assembleModelPath = os.path.join(self.getModelDirFilePath(), fn)
+        # -- relabel
+        parentModelCountD = defaultdict(int)
+        for dataContainer in dataContainerL:
+            tModelId = dataContainer.getName()
+            pId = tModelId.split("_")[1]
+            parentModelCountD[pId] += 1
+            pModelId = self.__makePublicModelId(pId, parentModelCountD[pId])
+            self.__replaceModelId(dataContainer, tModelId, pModelId)
+        # -- relabel
+        ok = mU.doExport(assembleModelPath, dataContainerL, fmt="mmcif")
+        logger.info("Assembled %d models status %r", len(dataContainerL), ok)
+        return len(dataContainerL)
+
+    def __replaceModelId(self, dataContainer, oldModelId, newModelId):
+        """Update all instances of the model in the input container with the input
+        replacement value.
+
+        Args:
+            dataContainerList (obj): input container list
+            newModelId (str):  replacement modelId value
+
+        """
+        updateL = [
+            ("pdbx_chem_comp_model", "id"),
+            ("pdbx_chem_comp_model_atom", "model_id"),
+            ("pdbx_chem_comp_model_bond", "model_id"),
+            ("pdbx_chem_comp_model_descriptor", "model_id"),
+            ("pdbx_chem_comp_model_reference", "model_id"),
+            ("pdbx_chem_comp_model_feature", "model_id"),
+            ("pdbx_chem_comp_model_audit", "model_id"),
+        ]
+        try:
+            dataContainer.setName(newModelId)
+            for tup in updateL:
+                cObj = dataContainer.getObj(tup[0])
+                cObj.replaceValue(oldModelId, newModelId, tup[1])
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return dataContainer
+
+    def __getToday(self):
+        """Return a CIF style date-timestamp value for current local time -"""
+        today = datetime.datetime.today()
+        # format ="%Y-%m-%d:%H:%M"
+        fmt = "%Y-%m-%d"
+        return str(today.strftime(fmt))
+
+    def __makePublicModelId(self, parentId, modelNum=1):
+        modelId = "M_" + parentId + "_%05d" % modelNum
+        return modelId

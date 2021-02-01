@@ -46,6 +46,8 @@ def main():
     parser.add_argument("--update_only", default=False, action="store_true", help="Only update current search results")
     #
     parser.add_argument("--build", default=False, action="store_true", help="Build models from CCDC search results")
+    parser.add_argument("--assemble", default=False, action="store_true", help="Assemble models into a concatenated file")
+    parser.add_argument("--max_r_factor", default=10.0, help="Maximum permissible R-value (default=10.0)")
     #
     parser.add_argument("--csdhome", default=None, help="Path to the CSD release (path to CSD_202x)")
     parser.add_argument("--python_lib_path", default=None, help="Path to Python library")
@@ -77,6 +79,8 @@ def main():
         updateOnly = args.update_only
         #
         doBuild = args.build
+        doAssemble = args.assemble
+        maxRFactor = args.max_r_factor
     except Exception as e:
         logger.exception("Argument processing problem %s", str(e))
         parser.print_help(sys.stderr)
@@ -113,8 +117,13 @@ def main():
 
         if doBuild:
             ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
-            rD = ccmb.build()
+            rD = ccmb.build(alignType="relaxed-stereo", numProc=numProc, chunkSize=chunkSize)
             logger.info("Built model count %d", len(rD))
+
+        if doAssemble:
+            ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
+            rD = ccmb.assemble(maxRFactor=maxRFactor)
+            logger.info("Assembled model count %d", len(rD))
 
     except Exception as e:
         logger.exception("Failing with %s", str(e))

@@ -59,11 +59,13 @@ class ChemCompModelBuildTests(unittest.TestCase):
         """Test case: model build workflow step"""
         try:
             ccmb = ChemCompModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
-            rD = ccmb.build()
+            rD = ccmb.build(numProc=2, chunkSize=2)
             logger.info("Matched search ids %r", list(rD.keys()))
             self.assertGreaterEqual(len(rD), 4)
             qD = ccmb.fetchModelIndex()
             self.assertEqual(len(rD), len(qD))
+            ok = ccmb.assemble(maxRFactor=10.0)
+            self.assertTrue(ok)
 
         except Exception as e:
             logger.exception("Failing with %s", str(e))
