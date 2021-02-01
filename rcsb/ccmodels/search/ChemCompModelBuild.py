@@ -63,103 +63,106 @@ class ChemCompModelBuildWorker(object):
         resultList = []
         successList = []
         #
-        alignType = optionsD["alignType"]
-        modelDirPath = optionsD["modelDirPath"]
-        imageDirPath = optionsD["imageDirPath"]
-        self.__ccSIdxP = optionsD["ccSIdxP"]
-        #
-        startTime = time.time()
-        logger.info("Starting %s at %s", procName, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
-        #
-        parentD = {}
-        parentModelCountD = defaultdict(int)
-        for idxPath in dataList:
-            fn = os.path.basename(idxPath)
-            sId = fn.replace("-index.json", "")
+        try:
+            alignType = optionsD["alignType"]
+            modelDirPath = optionsD["modelDirPath"]
+            imageDirPath = optionsD["imageDirPath"]
+            self.__ccSIdxP = optionsD["ccSIdxP"]
+            #
+            startTime = time.time()
             logger.info("%s ======== ============ ============ ", procName)
-            parentId = sId.split("|")[0]
-
-            logger.info("%s Start model build for search Id (%s) %s", procName, parentId, sId)
+            logger.info("%s starting with length %d at %s", procName, len(dataList), time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
             #
-            matchObjIt = CcdcMatchIndex(indexFilePath=idxPath)
-            matchObjIt.sort()
-            pairList = []
+            parentD = {}
+            parentModelCountD = defaultdict(int)
+            for idxPath in dataList:
+                fn = os.path.basename(idxPath)
+                sId = fn.replace("-index.json", "")
+                parentId = sId.split("|")[0]
+                logger.info("%s Start model build for search Id (%s) %s", procName, parentId, sId)
+                #
+                matchObjIt = CcdcMatchIndex(indexFilePath=idxPath)
+                matchObjIt.sort()
+                pairList = []
 
-            for matchObj in matchObjIt:
-                targetCifPath = matchObj.getTargetCcPath()
-                fitMolFilePath = matchObj.getMol2Path()
-                matchId = matchObj.getIdentifier()
-                targetId = matchObj.getTargetId()
-                matchTitle = "CCDC Code  " + matchId
-                ccTitle = "Chemical Component " + targetId
-                #
-                nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL = self.__alignModelSubStruct(
-                    targetCifPath, fitMolFilePath, alignType=alignType, fitTitle=matchId, refTitle=targetId, verbose=False
-                )
-                logger.debug(
-                    ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
-                )
-                # -----
-                smilesMatch = refFD["SMILES_STEREO"] == fitFD["SMILES_STEREO"]
-                hasUnMapped = len(fitAtomUnMappedL) > 0
-                unMappedOk = self.__testUnMappedProtonation(fitAtomUnMappedL)
-                #
-                if not ((nAtomsRef <= len(fitXyzMapD) and hasUnMapped and unMappedOk) or (nAtomsRef == len(fitXyzMapD) and smilesMatch)):
-                    continue
-                #
-                if hasUnMapped and not smilesMatch:
-                    logger.info("%s SMILES differ for match with unmapped protons", procName)
-                    logger.debug("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
-                    logger.debug("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
-                # --------- ----------------
-                #  Accept the match
-                # --------- ----------------
-                matchId = matchObj.getIdentifier()
-                targetId = matchObj.getTargetId()
-                parentD.setdefault(parentId, []).append(matchId)
-                #
-                refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
-                refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
-                self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
-                # --------- ------------------
-                pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
-                modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
-                ok, variantType = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
-                if ok:
-                    parentModelCountD[parentId] += 1
-                    hd = matchObj.getHasDisorder()
-                    resultList.append(
-                        {
-                            "modelId": modelId,
-                            "searchId": targetId,
-                            "parentId": parentId,
-                            "matchId": matchId,
-                            "modelPath": modelPath,
-                            "rFactor": matchObj.getRFactor(),
-                            "hasDisorder": hd if hd else "N",
-                            "variantType": variantType,
-                        }
+                for matchObj in matchObjIt:
+                    targetCifPath = matchObj.getTargetCcPath()
+                    fitMolFilePath = matchObj.getMol2Path()
+                    matchId = matchObj.getIdentifier()
+                    targetId = matchObj.getTargetId()
+                    matchTitle = "CCDC Code  " + matchId
+                    ccTitle = "Chemical Component " + targetId
+                    #
+                    nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL = self.__alignModelSubStruct(
+                        targetCifPath, fitMolFilePath, alignType=alignType, fitTitle=matchId, refTitle=targetId, verbose=False
                     )
-            #
-            if pairList:
-                pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
-                self.__depictFitList(sId, pdfImagePath, pairList, alignType=alignType)
-            if resultList:
-                logger.info("%s built %d models for %s (this iteration)", procName, parentModelCountD[parentId], parentId)
-                successList.append(idxPath)
-            else:
-                logger.info("%s no models built for %s", procName, sId)
+                    logger.debug(
+                        ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
+                    )
+                    # -----
+                    smilesMatch = refFD["SMILES_STEREO"] == fitFD["SMILES_STEREO"]
+                    hasUnMapped = len(fitAtomUnMappedL) > 0
+                    unMappedOk = self.__testUnMappedProtonation(fitAtomUnMappedL)
+                    #
+                    if not ((nAtomsRef <= len(fitXyzMapD) and hasUnMapped and unMappedOk) or (nAtomsRef == len(fitXyzMapD) and smilesMatch)):
+                        continue
+                    #
+                    if hasUnMapped and not smilesMatch:
+                        logger.info("%s SMILES differ for match with unmapped protons", procName)
+                        logger.debug("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
+                        logger.debug("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
+                    # --------- ----------------
+                    #  Accept the match
+                    # --------- ----------------
+                    matchId = matchObj.getIdentifier()
+                    targetId = matchObj.getTargetId()
+                    parentD.setdefault(parentId, []).append(matchId)
+                    #
+                    refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
+                    refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
+                    self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
+                    # --------- ------------------
+                    pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
+                    modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
+                    ok, variantType = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
+                    if ok:
+                        parentModelCountD[parentId] += 1
+                        hd = matchObj.getHasDisorder()
+                        resultList.append(
+                            {
+                                "modelId": modelId,
+                                "searchId": targetId,
+                                "parentId": parentId,
+                                "matchId": matchId,
+                                "modelPath": modelPath,
+                                "rFactor": matchObj.getRFactor(),
+                                "hasDisorder": hd if hd else "N",
+                                "variantType": variantType,
+                            }
+                        )
+                #
+                if pairList:
+                    pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
+                    self.__depictFitList(sId, pdfImagePath, pairList, alignType=alignType)
+                if resultList:
+                    logger.info("%s built %d models for %s (this iteration)", procName, parentModelCountD[parentId], parentId)
+                    successList.append(idxPath)
+                else:
+                    logger.info("%s no models built for %s", procName, sId)
 
-        endTime = time.time()
-        logger.info(
-            "%s (match successes %d total models this iterations %d) completed at %s (%.2f seconds)",
-            procName,
-            len(successList),
-            len(resultList),
-            time.strftime("%Y %m %d %H:%M:%S", time.localtime()),
-            endTime - startTime,
-        )
-        return successList, resultList, []
+            endTime = time.time()
+            logger.info(
+                "%s (match successes %d total models this iterations %d) completed at %s (%.2f seconds)",
+                procName,
+                len(successList),
+                len(resultList),
+                time.strftime("%Y %m %d %H:%M:%S", time.localtime()),
+                endTime - startTime,
+            )
+            return successList, resultList, []
+        except Exception as e:
+            logger.exception("%s failing with %s", procName, str(e))
+        return [], [], []
 
     def __getBuildVariant(self, sId):
         """Lookup the build type from the input chemical component search index Id.
