@@ -124,7 +124,7 @@ def main():
         if doAssemble:
             ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
             numAssem = ccmb.assemble(maxRFactor=maxRFactor)
-            logger.info("Assembled model count %d", numAssem
+            logger.info("Assembled model count %d", numAssem)
 
     except Exception as e:
         logger.exception("Failing with %s", str(e))
