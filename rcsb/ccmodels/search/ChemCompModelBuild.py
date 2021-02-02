@@ -719,7 +719,7 @@ class ChemCompModelBuild(object):
             idxPathL = list(idxPathD.values())
             pD = {}
             for sId in idxPathD:
-                parentId = sId.split("|")
+                parentId = sId.split("|")[0]
                 pD.setdefault(parentId, []).append(sId)
             logger.info("Using search result index length ridxD (%d) parent coverage (%d)", len(idxPathD), len(pD))
             #
