@@ -80,7 +80,7 @@ class ChemCompModelBuildWorker(object):
                 fn = os.path.basename(idxPath)
                 sId = fn.replace("-index.json", "")
                 parentId = sId.split("|")[0]
-                logger.info("%s Start model build for search Id (%s) %s", procName, parentId, sId)
+                logger.info("%s start model build for search Id (%s) %s", procName, parentId, sId)
                 #
                 matchObjIt = CcdcMatchIndex(indexFilePath=idxPath)
                 matchObjIt.sort()
@@ -113,8 +113,20 @@ class ChemCompModelBuildWorker(object):
                     hasUnMapped = len(fitAtomUnMappedL) > 0
                     unMappedOk = self.__testUnMappedProtonation(fitAtomUnMappedL)
                     #
-                    if not ((nAtomsRef <= len(fitXyzMapD) and hasUnMapped and unMappedOk) or (nAtomsRef == len(fitXyzMapD) and smilesMatch)):
-                        logger.info("%s alignment criteria rejects (smilesMatch %r hasUnmapped %r) for %s with %s", procName, smilesMatch, hasUnMapped, targetId, matchId)
+                    if not ((nAtomsRef <= len(fitXyzMapD) and hasUnMapped and unMappedOk) or (nAtomsRef >= len(fitXyzMapD) and smilesMatch)):
+                        logger.info(
+                            "%s rejecting (smilesMatch %r hasUnmapped %r (%d) unMappedOk %r nAtomsRef %d nAtomsFit %d mapped fit %d) for %s with %s",
+                            procName,
+                            smilesMatch,
+                            hasUnMapped,
+                            len(fitAtomUnMappedL),
+                            unMappedOk,
+                            nAtomsRef,
+                            nAtomsFit,
+                            len(fitXyzMapD),
+                            targetId,
+                            matchId,
+                        )
                         continue
                     #
                     if hasUnMapped and not smilesMatch:
@@ -133,8 +145,9 @@ class ChemCompModelBuildWorker(object):
                     self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
                     # --------- ------------------
                     pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
-                    modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
-                    # modelId, modelPath = self.__makeModelPathX(modelDirPath, parentId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
+                    modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=False)
+                    logger.info("targetId %r modelId %r modelPath %r", targetId, modelId, modelPath)
+                    #
                     ok, variantType = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
                     if ok:
                         parentModelCountD[parentId] += 1
@@ -217,7 +230,7 @@ class ChemCompModelBuildWorker(object):
         """
         try:
             logger.debug("Align target cc %s with matching model %s", ccRefPath, molFitPath)
-            oesU = OeAlignUtils(verbose=verbose)
+            oesU = OeAlignUtils(workPath=self.__cachePath, verbose=verbose)
             oesU.setSearchType(sType=alignType)
             oesU.setRefPath(ccPath=ccRefPath, title=refTitle)
             oesU.setFitPath(molFitPath, title=fitTitle, suppressHydrogens=False, fType="sdf", importType="3D")
@@ -260,7 +273,7 @@ class ChemCompModelBuildWorker(object):
         """
         try:
             logger.debug("Align target cc %s with matching model %s", ccRefPath, molFitPath)
-            oesU = OeAlignUtils(verbose=verbose)
+            oesU = OeAlignUtils(workPath=self.__cachePath, verbose=verbose)
             oesU.setSearchType(sType=alignType)
             oesU.setRefPath(ccPath=ccRefPath, title=refTitle)
             oesU.setFitPath(molFitPath, title=fitTitle, suppressHydrogens=False, fType="sdf", importType="3D")
@@ -364,29 +377,32 @@ class ChemCompModelBuildWorker(object):
         return aML
 
     def __makeModelPath(self, modelDirPath, parentId, targetId, startingModelNum=1, maxModels=200, scanExisting=False):
-        pth = None
-        ii = startingModelNum
-        dirPath = os.path.join(modelDirPath, parentId)
-        if not os.access(dirPath, os.R_OK):
-            os.makedirs(dirPath)
-            modelId = self.__makeModelId(targetId, modelNum=ii)
-            pth = os.path.join(dirPath, modelId + ".cif")
-            return modelId, pth
-        # optionally scan over any existing models before selecting a new model number.
-        if scanExisting:
-            while True:
+        try:
+            pth = None
+            ii = startingModelNum
+            dirPath = os.path.join(modelDirPath, parentId)
+            if not os.access(dirPath, os.R_OK):
+                os.makedirs(dirPath)
                 modelId = self.__makeModelId(targetId, modelNum=ii)
                 pth = os.path.join(dirPath, modelId + ".cif")
-                if not os.access(pth, os.R_OK):
-                    return modelId, pth
-                #
-                ii += 1
-                if ii > maxModels:
-                    break
-        else:
-            modelId = self.__makeModelId(targetId, modelNum=ii)
-            pth = os.path.join(dirPath, modelId + ".cif")
-            return modelId, pth
+                return modelId, pth
+            # optionally scan over any existing models before selecting a new model number.
+            if scanExisting:
+                while True:
+                    modelId = self.__makeModelId(targetId, modelNum=ii)
+                    pth = os.path.join(dirPath, modelId + ".cif")
+                    if not os.access(pth, os.R_OK):
+                        return modelId, pth
+                    #
+                    ii += 1
+                    if ii > maxModels:
+                        break
+            else:
+                modelId = self.__makeModelId(targetId, modelNum=ii)
+                pth = os.path.join(dirPath, modelId + ".cif")
+                return modelId, pth
+        except Exception as e:
+            logger.exception("Failing for %r %r %r with %s", parentId, targetId, modelDirPath, str(e))
 
         return None, None
 
@@ -451,12 +467,13 @@ class ChemCompModelBuildWorker(object):
             AlignAtomUnMapped = namedtuple("AlignAtomUnMapped", "fitId fitAtIdx fitAtNo fitAtType fitAtName fitAtFormalCharge x y z fitNeighbors")
         """
         try:
+            unMappedTypeD = defaultdict(int)
             hAtomPrefix = "HEX"
             variantType = self.__getBuildVariant(targetId)
-            # Check for the common
+            #
             if not self.__testUnMappedProtonation(fitAtomUnMappedL):
                 return False
-            # Get atom partners
+            # Get atom partners for the unmapped atoms
             fitAtMapD = {}
             for refAtName, fAtTup in fitXyzMapD.items():
                 fitAtMapD[fAtTup.atName] = refAtName
@@ -514,21 +531,29 @@ class ChemCompModelBuildWorker(object):
             if myContainer.exists("chem_comp_atom"):
                 cObj = myContainer.getObj("chem_comp_atom")
             #
+            #  Only write the mapped atoms in case we are missing hydrogens in the mapping
+            #
+            jj = 0
             for ii in range(cObj.getRowCount()):
                 atName = cObj.getValue("atom_id", ii)
                 atType = cObj.getValue("type_symbol", ii)
+                if atName not in fitXyzMapD:
+                    unMappedTypeD[atType] += 1
+                    continue
+                fitXyz = fitXyzMapD[atName]
+                #
                 # fCharge = cObj.getValue("charge", ii)
                 #
-                wObj.setValue(modelId, "model_id", ii)
-                wObj.setValue(atName, "atom_id", ii)
-                wObj.setValue(atType, "type_symbol", ii)
+                wObj.setValue(modelId, "model_id", jj)
+                wObj.setValue(atName, "atom_id", jj)
+                wObj.setValue(atType, "type_symbol", jj)
                 #
-                fitXyz = fitXyzMapD[atName]
-                wObj.setValue(fitXyz.atFormalCharge, "charge", ii)
-                wObj.setValue("%.4f" % fitXyz.x, "model_Cartn_x", ii)
-                wObj.setValue("%.4f" % fitXyz.y, "model_Cartn_y", ii)
-                wObj.setValue("%.4f" % fitXyz.z, "model_Cartn_z", ii)
-                wObj.setValue(ii + 1, "ordinal_id", ii)
+                wObj.setValue(fitXyz.atFormalCharge, "charge", jj)
+                wObj.setValue("%.4f" % fitXyz.x, "model_Cartn_x", jj)
+                wObj.setValue("%.4f" % fitXyz.y, "model_Cartn_y", jj)
+                wObj.setValue("%.4f" % fitXyz.z, "model_Cartn_z", jj)
+                wObj.setValue(jj + 1, "ordinal_id", jj)
+                jj += 1
             #
             # Add the unmapped atoms ...
             # AlignAtomUnMapped = namedtuple("AlignAtomUnMapped", "fitId fitAtIdx fitAtNo fitAtType fitAtName fitNeighbors")
@@ -552,15 +577,22 @@ class ChemCompModelBuildWorker(object):
             if myContainer.exists("chem_comp_bond"):
                 cObj = myContainer.getObj("chem_comp_bond")
             #
+            jj = 0
             for ii in range(cObj.getRowCount()):
                 at1 = cObj.getValue("atom_id_1", ii)
+                if at1 not in fitXyzMapD:
+                    continue
                 at2 = cObj.getValue("atom_id_2", ii)
+                if at2 not in fitXyzMapD:
+                    continue
                 bType = cObj.getValue("value_order", ii)
-                wObj.setValue(modelId, "model_id", ii)
-                wObj.setValue(at1, "atom_id_1", ii)
-                wObj.setValue(at2, "atom_id_2", ii)
-                wObj.setValue(bType, "value_order", ii)
-                wObj.setValue(ii + 1, "ordinal_id", ii)
+                #
+                wObj.setValue(modelId, "model_id", jj)
+                wObj.setValue(at1, "atom_id_1", jj)
+                wObj.setValue(at2, "atom_id_2", jj)
+                wObj.setValue(bType, "value_order", jj)
+                wObj.setValue(jj + 1, "ordinal_id", jj)
+                jj += 1
             #
             ii = wObj.getRowCount()
             for jj, uTup in enumerate(fitAtomUnMappedL):
@@ -633,6 +665,9 @@ class ChemCompModelBuildWorker(object):
             if matchObj.getHasDisorder():
                 featureD["has_disorder"] = True
             #
+            if len(unMappedTypeD) == 1 and "H" in unMappedTypeD:
+                logger.info("model %r heavy_atoms_only", modelId)
+                featureD["heavy_atoms_only"] = True
             # --------  ---------
             catName = "pdbx_chem_comp_model_feature"
             if not dataContainer.exists(catName):
@@ -649,7 +684,7 @@ class ChemCompModelBuildWorker(object):
                     ii += 1
 
             #
-            boolKeyList = ["all_atoms_have_sites", "has_disorder", "neutron_radiation_experiment"]
+            boolKeyList = ["has_disorder", "neutron_radiation_experiment", "heavy_atoms_only"]
             for fKey in boolKeyList:
                 if fKey in featureD:
                     if featureD[fKey]:
@@ -856,17 +891,28 @@ class ChemCompModelBuild(object):
         for dataContainer in dataContainerL:
             nm = dataContainer.getName()
             logger.debug("datacontainer %r", nm)
+            #
             pId = nm.split("_")[1]
+            cObj = dataContainer.getObj("pdbx_chem_comp_model")
+            modelId = cObj.getValue("id", 0)
+            if modelId != nm:
+                logger.error("modelId %r datablock %r", modelId, nm)
+            #
             tD = {}
             for catName in catNameL:
                 cObj = dataContainer.getObj(catName)
                 nRows = cObj.getRowCount()
                 tD[catName] = nRows
-            rD.setdefault(pId, []).append(tD)
-            cObj = dataContainer.getObj("pdbx_chem_comp_model")
-            modelId = cObj.getValue("id", 0)
-            if modelId != nm:
-                logger.error("modelId %r datablock %r", modelId, nm)
+            cObj = dataContainer.getObj("pdbx_chem_comp_model_feature")
+            skip = False
+            for ii in range(cObj.getRowCount()):
+                fN = cObj.getValue("feature_name", ii)
+                fV = cObj.getValue("feature_value", ii)
+                if fN == "heavy_atoms_only" and fV == "Y":
+                    skip = True
+                    break
+            if not skip:
+                rD.setdefault(pId, []).append(tD)
         #
         for pId, tDL in rD.items():
             for catName in catNameL:
