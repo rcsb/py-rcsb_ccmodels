@@ -99,6 +99,8 @@ class ChemCompModelBuildWorker(object):
                     logger.debug(
                         ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
                     )
+                    if nAtomsRef == 0 and nAtomsFit == 0:
+                        continue
                     # -----
                     smilesMatch = refFD["SMILES_STEREO"] == fitFD["SMILES_STEREO"]
                     hasUnMapped = len(fitAtomUnMappedL) > 0
@@ -108,7 +110,7 @@ class ChemCompModelBuildWorker(object):
                         continue
                     #
                     if hasUnMapped and not smilesMatch:
-                        logger.info("%s SMILES differ for match with unmapped protons", procName)
+                        logger.info("%s SMILES for %s and %s differ with unmapped protons", procName, targetId, matchId)
                         logger.debug("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
                         logger.debug("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
                     # --------- ----------------
@@ -715,8 +717,12 @@ class ChemCompModelBuild(object):
             #
             idxPathD = ccms.getResultIndex()
             idxPathL = list(idxPathD.values())
-            logger.info("Result index length ridxD (%d)", len(idxPathD))
-
+            pD = {}
+            for sId in idxPathD:
+                parentId = sId.split("|")
+                pD.setdefault(parentId, []).append(sId)
+            logger.info("Using search result index length ridxD (%d) parent coverage (%d)", len(idxPathD), len(pD))
+            #
             pU = ChemCompModelBuildWorker(verbose=True)
             mpu = MultiProcUtil(verbose=True)
             mpu.setWorkingDir(modelDirPath)
