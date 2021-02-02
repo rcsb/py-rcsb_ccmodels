@@ -6,3 +6,4 @@
 27-Jan-2021 - V0.13 Make an index of the search files and avoid a file system glob search.
 31-Jan-2021 - V0.14 Create models for protomeric matches with unmapped protons, multiprocess model build workflow
  1-Feb-2021 - V0.15 Add assemble workflow and model relabeling to permit sequential public model identifiers.
+ 2-Feb-2021 - V0.16 Adjust mismatch reporting during build workflow, update dependencies, add assemble check method

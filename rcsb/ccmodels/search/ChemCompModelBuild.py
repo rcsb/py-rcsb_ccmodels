@@ -43,7 +43,8 @@ AlignAtomUnMapped = namedtuple("AlignAtomUnMapped", "fitId fitAtIdx fitAtNo fitA
 
 
 class ChemCompModelBuildWorker(object):
-    def __init__(self, verbose=True):
+    def __init__(self, cachePath, verbose=True):
+        self.__cachePath = cachePath
         self.__verbose = verbose
         self.__ccSIdxP = None
 
@@ -94,12 +95,18 @@ class ChemCompModelBuildWorker(object):
                     ccTitle = "Chemical Component " + targetId
                     #
                     nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL = self.__alignModelSubStruct(
-                        targetCifPath, fitMolFilePath, alignType=alignType, fitTitle=matchId, refTitle=targetId, verbose=False
+                        targetCifPath,
+                        fitMolFilePath,
+                        alignType=alignType,
+                        fitTitle=matchId,
+                        refTitle=targetId,
+                        verbose=self.__verbose,
                     )
                     logger.debug(
                         ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
                     )
                     if nAtomsRef == 0 and nAtomsFit == 0:
+                        logger.info("%s alignment fails for %s with %s", procName, targetId, matchId)
                         continue
                     # -----
                     smilesMatch = refFD["SMILES_STEREO"] == fitFD["SMILES_STEREO"]
@@ -107,6 +114,7 @@ class ChemCompModelBuildWorker(object):
                     unMappedOk = self.__testUnMappedProtonation(fitAtomUnMappedL)
                     #
                     if not ((nAtomsRef <= len(fitXyzMapD) and hasUnMapped and unMappedOk) or (nAtomsRef == len(fitXyzMapD) and smilesMatch)):
+                        logger.info("%s alignment criteria rejects (smilesMatch %r hasUnmapped %r) for %s with %s", procName, smilesMatch, hasUnMapped, targetId, matchId)
                         continue
                     #
                     if hasUnMapped and not smilesMatch:
@@ -125,7 +133,8 @@ class ChemCompModelBuildWorker(object):
                     self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
                     # --------- ------------------
                     pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
-                    modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
+                    modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
+                    # modelId, modelPath = self.__makeModelPathX(modelDirPath, parentId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=True)
                     ok, variantType = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
                     if ok:
                         parentModelCountD[parentId] += 1
@@ -354,7 +363,34 @@ class ChemCompModelBuildWorker(object):
             logger.exception("Failing with %s", str(e))
         return aML
 
-    def __makeModelPath(self, modelDirPath, parentId, startingModelNum=1, maxModels=200, scanExisting=False):
+    def __makeModelPath(self, modelDirPath, parentId, targetId, startingModelNum=1, maxModels=200, scanExisting=False):
+        pth = None
+        ii = startingModelNum
+        dirPath = os.path.join(modelDirPath, parentId)
+        if not os.access(dirPath, os.R_OK):
+            os.makedirs(dirPath)
+            modelId = self.__makeModelId(targetId, modelNum=ii)
+            pth = os.path.join(dirPath, modelId + ".cif")
+            return modelId, pth
+        # optionally scan over any existing models before selecting a new model number.
+        if scanExisting:
+            while True:
+                modelId = self.__makeModelId(targetId, modelNum=ii)
+                pth = os.path.join(dirPath, modelId + ".cif")
+                if not os.access(pth, os.R_OK):
+                    return modelId, pth
+                #
+                ii += 1
+                if ii > maxModels:
+                    break
+        else:
+            modelId = self.__makeModelId(targetId, modelNum=ii)
+            pth = os.path.join(dirPath, modelId + ".cif")
+            return modelId, pth
+
+        return None, None
+
+    def __makeModelPathX(self, modelDirPath, parentId, startingModelNum=1, maxModels=200, scanExisting=False):
         pth = None
         ii = startingModelNum
         dirPath = os.path.join(modelDirPath, parentId)
@@ -435,7 +471,7 @@ class ChemCompModelBuildWorker(object):
                 if not ok:
                     return False
                 else:
-                    logger.info("%s match has unmapped protonation", modelId)
+                    logger.debug("%s match has unmapped protonation", modelId)
                     variantType = "tautomer_protomer"
             #
             #
@@ -447,12 +483,12 @@ class ChemCompModelBuildWorker(object):
             # ------------
             dataContainer = DataContainer(modelId)
             #
-            mU = MarshalUtil()
+            mU = MarshalUtil(workPath=self.__cachePath)
             myContainerList = mU.doImport(targetPath, fmt="mmcif")
             myContainer = myContainerList[0]
             dbName = myContainer.getName()
             if dbName.upper() != targetId.upper():
-                logger.error("mismatch datablock (%r) and targetId (%r)", dbName, targetId)
+                logger.info("mismatch datablock (%r) and targetId (%r)", dbName, targetId)
             cObj = None
             if myContainer.exists("chem_comp"):
                 cObj = myContainer.getObj("chem_comp")
@@ -676,7 +712,7 @@ class ChemCompModelBuild(object):
     def fetchModelIndex(self):
         mD = {}
         try:
-            mU = MarshalUtil()
+            mU = MarshalUtil(workPath=self.__cachePath)
             fp = self.__getModelIndexPath()
             mD = mU.doImport(fp, fmt="json")
         except Exception as e:
@@ -685,7 +721,7 @@ class ChemCompModelBuild(object):
 
     def storeModelIndex(self, mD):
         try:
-            mU = MarshalUtil()
+            mU = MarshalUtil(workPath=self.__cachePath)
             fp = self.__getModelIndexPath()
             ok = mU.doExport(fp, mD, fmt="json", indent=3)
         except Exception as e:
@@ -696,7 +732,7 @@ class ChemCompModelBuild(object):
     def __getModelIndexPath(self):
         return os.path.join(self.getModelDirFilePath(), "model-index.json")
 
-    def build(self, alignType="relaxed-stereo", numProc=4, chunkSize=10):
+    def build(self, alignType="relaxed-stereo", numProc=4, chunkSize=10, verbose=False):
         """Run the model build step in the chemical component model workflow.
 
         Args:
@@ -723,7 +759,7 @@ class ChemCompModelBuild(object):
                 pD.setdefault(parentId, []).append(sId)
             logger.info("Using search result index length ridxD (%d) parent coverage (%d)", len(idxPathD), len(pD))
             #
-            pU = ChemCompModelBuildWorker(verbose=True)
+            pU = ChemCompModelBuildWorker(self.__cachePath, verbose=verbose)
             mpu = MultiProcUtil(verbose=True)
             mpu.setWorkingDir(modelDirPath)
             mpu.setOptions(optionsD={"modelDirPath": modelDirPath, "imageDirPath": imageDirPath, "alignType": alignType, "ccSIdxP": self.__ccSIdxP})
@@ -757,7 +793,7 @@ class ChemCompModelBuild(object):
             (bool): True for success or False otherwise
         """
         dataContainerL = []
-        mU = MarshalUtil()
+        mU = MarshalUtil(workPath=self.__cachePath)
         modelIndexD = self.fetchModelIndex()
         for _, mDL in modelIndexD.items():
             mDLS = sorted(mDL, key=itemgetter("rFactor"), reverse=False)
@@ -792,14 +828,55 @@ class ChemCompModelBuild(object):
         parentModelCountD = defaultdict(int)
         for dataContainer in dataContainerL:
             tModelId = dataContainer.getName()
-            pId = tModelId.split("_")[1]
+            tId = tModelId.split("_")[1]
+            pId = tId.split("|")[0]
             parentModelCountD[pId] += 1
             pModelId = self.__makePublicModelId(pId, parentModelCountD[pId])
             self.__replaceModelId(dataContainer, tModelId, pModelId)
         # -- relabel
         ok = mU.doExport(assembleModelPath, dataContainerL, fmt="mmcif")
         logger.info("Assembled %d models status %r", len(dataContainerL), ok)
+        self.__checkAssembledModels(assembleModelPath)
         return len(dataContainerL)
+
+    def __checkAssembledModels(self, assembleModelPath):
+        catNameL = [
+            "pdbx_chem_comp_model",
+            "pdbx_chem_comp_model_atom",
+            "pdbx_chem_comp_model_bond",
+            "pdbx_chem_comp_model_descriptor",
+            "pdbx_chem_comp_model_reference",
+            "pdbx_chem_comp_model_feature",
+            "pdbx_chem_comp_model_audit",
+        ]
+        mU = MarshalUtil(workPath=self.__cachePath)
+        dataContainerL = mU.doImport(assembleModelPath, fmt="mmcif")
+        logger.info("Read %d data containers", len(dataContainerL))
+        rD = {}
+        for dataContainer in dataContainerL:
+            nm = dataContainer.getName()
+            logger.debug("datacontainer %r", nm)
+            pId = nm.split("_")[1]
+            tD = {}
+            for catName in catNameL:
+                cObj = dataContainer.getObj(catName)
+                nRows = cObj.getRowCount()
+                tD[catName] = nRows
+            rD.setdefault(pId, []).append(tD)
+            cObj = dataContainer.getObj("pdbx_chem_comp_model")
+            modelId = cObj.getValue("id", 0)
+            if modelId != nm:
+                logger.error("modelId %r datablock %r", modelId, nm)
+        #
+        for pId, tDL in rD.items():
+            for catName in catNameL:
+                minV = 100000
+                maxV = -1
+                for tD in tDL:
+                    minV = min(minV, tD[catName])
+                    maxV = max(maxV, tD[catName])
+                if maxV - minV > 1 and catName not in ["pdbx_chem_comp_model_feature"]:
+                    logger.error("%s %s row count inconsistency %d %d", pId, catName, minV, maxV)
 
     def __replaceModelId(self, dataContainer, oldModelId, newModelId):
         """Update all instances of the model in the input container with the input

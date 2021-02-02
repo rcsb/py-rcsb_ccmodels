@@ -55,7 +55,7 @@ def main():
     #
     parser.add_argument("--num_proc", default=2, help="Number of processes to execute (default=2)")
     parser.add_argument("--chunk_size", default=10, help="Number of files loaded per process")
-
+    parser.add_argument("--verbose", default=False, action="store_true", help="Verbose output")
     args = parser.parse_args()
     #
     try:
@@ -81,6 +81,7 @@ def main():
         doBuild = args.build
         doAssemble = args.assemble
         maxRFactor = args.max_r_factor
+        verbose = args.verbose
     except Exception as e:
         logger.exception("Argument processing problem %s", str(e))
         parser.print_help(sys.stderr)
@@ -117,13 +118,13 @@ def main():
 
         if doBuild:
             ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
-            rD = ccmb.build(alignType="relaxed-stereo", numProc=numProc, chunkSize=chunkSize)
+            rD = ccmb.build(alignType="relaxed-stereo", numProc=numProc, chunkSize=chunkSize, verbose=verbose)
             logger.info("Built model count %d", len(rD))
 
         if doAssemble:
             ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
-            rD = ccmb.assemble(maxRFactor=maxRFactor)
-            logger.info("Assembled model count %d", len(rD))
+            numAssem = ccmb.assemble(maxRFactor=maxRFactor)
+            logger.info("Assembled model count %d", numAssem
 
     except Exception as e:
         logger.exception("Failing with %s", str(e))
