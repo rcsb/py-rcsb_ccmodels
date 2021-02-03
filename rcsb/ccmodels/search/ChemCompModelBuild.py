@@ -146,8 +146,21 @@ class ChemCompModelBuildWorker(object):
                     # --------- ------------------
                     pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
                     modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=False)
-                    logger.info("targetId %r modelId %r modelPath %r", targetId, modelId, modelPath)
+                    logger.debug("targetId %r modelId %r modelPath %r", targetId, modelId, modelPath)
                     #
+                    logger.info(
+                        "%s accepted (smilesMatch %r hasUnmapped %r (%d) unMappedOk %r nAtomsRef %d nAtomsFit %d mapped fit %d) for %s with %s",
+                        procName,
+                        smilesMatch,
+                        hasUnMapped,
+                        len(fitAtomUnMappedL),
+                        unMappedOk,
+                        nAtomsRef,
+                        nAtomsFit,
+                        len(fitXyzMapD),
+                        targetId,
+                        matchId,
+                    )
                     ok, variantType = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
                     if ok:
                         parentModelCountD[parentId] += 1
@@ -472,7 +485,7 @@ class ChemCompModelBuildWorker(object):
             variantType = self.__getBuildVariant(targetId)
             #
             if not self.__testUnMappedProtonation(fitAtomUnMappedL):
-                logger.info("Unmapped non-hydrogen atoms (%r) target %r model %r", fitAtomUnMappedL, targetId, modelId)
+                logger.info("Unmapped non-hydrogen atoms target %r model %r unMapped count (%d)", targetId, modelId, len(fitAtomUnMappedL))
                 return False, variantType
             # Get atom partners for the unmapped atoms
             fitAtMapD = {}
