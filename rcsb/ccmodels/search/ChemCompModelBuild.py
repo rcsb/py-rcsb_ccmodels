@@ -472,7 +472,8 @@ class ChemCompModelBuildWorker(object):
             variantType = self.__getBuildVariant(targetId)
             #
             if not self.__testUnMappedProtonation(fitAtomUnMappedL):
-                return False
+                logger.info("Unmapped non-hydrogen atoms (%r) target %r model %r", fitAtomUnMappedL, targetId, modelId)
+                return False, variantType
             # Get atom partners for the unmapped atoms
             fitAtMapD = {}
             for refAtName, fAtTup in fitXyzMapD.items():
@@ -484,9 +485,10 @@ class ChemCompModelBuildWorker(object):
                     for nAtName in fitUnTup.fitNeighbors:
                         if nAtName not in fitAtMapD:
                             ok = False
+                            logger.info("Missing mapped neighbor for %r target %r model %r", nAtName, targetId, modelId)
                             break
                 if not ok:
-                    return False
+                    return False, variantType
                 else:
                     logger.debug("%s match has unmapped protonation", modelId)
                     variantType = "tautomer_protomer"
@@ -496,7 +498,7 @@ class ChemCompModelBuildWorker(object):
             for k in kList:
                 if k not in fitFD:
                     logger.error("Fit feature dictionary for %s missing key %s", targetId, k)
-                    return False
+                    return False, variantType
             # ------------
             dataContainer = DataContainer(modelId)
             #
