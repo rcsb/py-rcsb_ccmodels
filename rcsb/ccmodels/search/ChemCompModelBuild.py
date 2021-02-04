@@ -673,11 +673,11 @@ class ChemCompModelBuildWorker(object):
             #
             v = matchObj.getTemperature()
             vS = str(v)
-            # remove string artifacts for temperature ...
+            # remove string artifacts from temperature string ...
             if v is not None and len(vS) > 0:
                 tV = vS.upper()
                 try:
-                    tV = tV.replace("at ", "")
+                    tV = tV.replace("AT ", "")
                     tV = tV.replace(" K", "")
                     tV = float(tV)
                     featureD["experiment_temperature"] = tV
