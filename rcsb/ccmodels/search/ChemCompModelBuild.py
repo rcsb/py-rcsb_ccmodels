@@ -101,6 +101,7 @@ class ChemCompModelBuildWorker(object):
                         refTitle=targetId,
                         onlyCloseMatches=True,
                         verbose=self.__verbose,
+                        procName=procName,
                     )
                     logger.debug(
                         ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
@@ -237,7 +238,9 @@ class ChemCompModelBuildWorker(object):
             return "tautomer_protomer"
         return ""
 
-    def __alignModelMcss(self, ccRefPath, molFitPath, alignType="stict", fitTitle=None, refTitle=None, unique=False, minFrac=0.9, onlyCloseMatches=False, verbose=False):
+    def __alignModelMcss(
+        self, ccRefPath, molFitPath, alignType="stict", fitTitle=None, refTitle=None, unique=False, minFrac=0.9, onlyCloseMatches=False, verbose=False, procName="main"
+    ):
         """Align (substructure) chemical component definition search target with the candidate matching reference molecule.
 
         Args:
@@ -250,6 +253,7 @@ class ChemCompModelBuildWorker(object):
             minFrac (float, optional): minimum atom-level matching coverage fraction. Defaults to 0.9.
             onlyCloseMatches (bool, optional): triage alignments for only close matches. Defaults to False
             verbose (bool, optional): enable verbose output. Defaults to False.
+            procName (str, optional):  process name.  Defaults to main
 
         Returns:
             (tuple): (  number of atoms reference molecule,
@@ -288,10 +292,10 @@ class ChemCompModelBuildWorker(object):
             # -----
             return nAtomsRef, refFD, nAtomsFit, fitFD, atomMapD, fitAtomUnMappedL, isSkipped
         except Exception as e:
-            logger.exception("Failing for %r and %r with %s", ccRefPath, molFitPath, str(e))
+            logger.exception("%a failing for %r and %r with %s", procName, ccRefPath, molFitPath, str(e))
         return 0, {}, 0, {}, {}, [], False
 
-    def __alignModelSubStruct(self, ccRefPath, molFitPath, alignType="strict", fitTitle=None, refTitle=None, onlyCloseMatches=False, verbose=False):
+    def __alignModelSubStruct(self, ccRefPath, molFitPath, alignType="strict", fitTitle=None, refTitle=None, onlyCloseMatches=False, verbose=False, procName="main"):
         """Align (substructure) chemical component definition search target with the candidate matching reference molecule.
 
         Args:
@@ -302,6 +306,8 @@ class ChemCompModelBuildWorker(object):
             refTitle (str, optional): reference molecule title. Defaults to None.
             onlyCloseMatches (bool, optional): triage alignments for only close matches. Defaults to False
             verbose (bool, optional): enable verbose output. Defaults to False.
+            procName (str, optional):  process name.  Defaults to main
+
 
         Returns:
             (tuple): (  number of atoms reference molecule,
@@ -340,7 +346,7 @@ class ChemCompModelBuildWorker(object):
             # -----
             return nAtomsRef, refFD, nAtomsFit, fitFD, atomMapD, fitAtomUnMappedL, isSkipped
         except Exception as e:
-            logger.exception("Failing for %r and %r with %s", ccRefPath, molFitPath, str(e))
+            logger.exception("%s failing for %r and %r with %s", procName, ccRefPath, molFitPath, str(e))
         return 0, {}, 0, {}, {}, [], False
 
     def __pairDepictPage(self, imagePath, refId, refTitle, refMol, fitId, fitTitle, fitMol, alignType="strict"):
