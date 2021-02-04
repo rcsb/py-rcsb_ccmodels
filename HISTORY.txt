@@ -8,3 +8,4 @@
  1-Feb-2021 - V0.15 Add assemble workflow and model relabeling to permit sequential public model identifiers.
  2-Feb-2021 - V0.16 Adjust mismatch reporting during build workflow, update dependencies, add assemble check method
  2-Feb-2021 - V0.17 Add working path to OeAlignUtils(), adjust check method, keep heavy atom only structures
+ 3-Feb-2021 - V0.18 Simplify the build alignment criteria, add cli criteria option, and improve the handling of aromatic bond matching

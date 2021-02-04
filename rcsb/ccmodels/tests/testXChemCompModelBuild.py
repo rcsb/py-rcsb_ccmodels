@@ -59,7 +59,7 @@ class ChemCompModelBuildTests(unittest.TestCase):
         """Test case: model build workflow step"""
         try:
             ccmb = ChemCompModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
-            rD = ccmb.build(numProc=2, chunkSize=2)
+            rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=2, chunkSize=2)
             logger.info("Matched search ids %r", list(rD.keys()))
             self.assertGreaterEqual(len(rD), 4)
             qD = ccmb.fetchModelIndex()

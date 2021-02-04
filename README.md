@@ -94,11 +94,11 @@ python ChemCompModelExec.py --help
 cc_models_cli --help
 
 usage: cc_models_cli [-h] [--generate] [--cc_locator CC_LOCATOR] [--bird_locator BIRD_LOCATOR]
-                      [--prefix PREFIX] [--cache_path CACHE_PATH] [--use_cache]
-                     [--limit_perceptions] [--search] [--update_only] [--build]
-                     [--assemble] [--max_r_factor MAX_R_FACTOR] [--csdhome CSDHOME]
-                     [--python_lib_path PYTHON_LIB_PATH] [--python_version PYTHON_VERSION]
-                     [--num_proc NUM_PROC] [--chunk_size CHUNK_SIZE]
+                     [--prefix PREFIX] [--cache_path CACHE_PATH] [--use_cache]
+                     [--limit_perceptions] [--search] [--update_only] [--build] [--build_align_type BUILD_ALIGN_TYPE] [--assemble] [--max_r_factor MAX_R_FACTOR]
+                     [--csdhome CSDHOME] [--python_lib_path PYTHON_LIB_PATH]
+                     [--python_version PYTHON_VERSION] [--num_proc NUM_PROC] [--chunk_size CHUNK_SIZE]
+                     [--verbose]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -115,6 +115,8 @@ optional arguments:
   --search              Execute CCDC search
   --update_only         Only update current search results
   --build               Build models from CCDC search results
+  --build_align_type BUILD_ALIGN_TYPE
+                        Alignment criteria (default: graph-relaxed-stereo
   --assemble            Assemble models into a concatenated file
   --max_r_factor MAX_R_FACTOR
                         Maximum permissible R-value (default=10.0)
@@ -126,7 +128,8 @@ optional arguments:
   --num_proc NUM_PROC   Number of processes to execute (default=2)
   --chunk_size CHUNK_SIZE
                         Number of files loaded per process
-
+  --verbose             Verbose output
+__________________________________________________
 ```
 
 An example workflow script would look like the following:
@@ -142,7 +145,7 @@ echo "Begin search workflow"
 cc_models_cli --search --num_proc 4 --cache_path ./CACHE
 #
 echo "Begin build workflow"
-cc_models_cli --build --num_proc 4 --cache_path ./CACHE
+cc_models_cli --build --num_proc 4 --cache_path ./CACHE --build_align_type graph-relaxed-stereo-sdeq
 
 echo "Begin assemble workflow"
 cc_models_cli --assemble --min_r_factor 10.0  --cache_path ./CACHE

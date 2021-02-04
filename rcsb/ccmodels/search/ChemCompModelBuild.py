@@ -113,7 +113,22 @@ class ChemCompModelBuildWorker(object):
                     hasUnMapped = len(fitAtomUnMappedL) > 0
                     unMappedOk = self.__testUnMappedProtonation(fitAtomUnMappedL)
                     #
-                    if not ((nAtomsRef <= len(fitXyzMapD) and hasUnMapped and unMappedOk) or (nAtomsRef >= len(fitXyzMapD) and smilesMatch)):
+                    #   --- acceptance tests ---
+                    acceptOk = False
+                    if nAtomsRef == len(fitXyzMapD) and smilesMatch:
+                        # Take all cases with matching SMILES and all atoms aligned
+                        acceptOk = True
+                    elif nAtomsRef > len(fitXyzMapD) and smilesMatch:
+                        # Heavy atom only match
+                        acceptOk = True
+                    elif nAtomsRef == len(fitXyzMapD) and hasUnMapped and unMappedOk:
+                        # All atoms aligned and fit includes a protonation ...
+                        acceptOk = True
+                    else:
+                        pass
+
+                    #
+                    if not acceptOk:
                         logger.info(
                             "%s rejecting (smilesMatch %r hasUnmapped %r (%d) unMappedOk %r nAtomsRef %d nAtomsFit %d mapped fit %d) for %s with %s",
                             procName,
@@ -133,6 +148,7 @@ class ChemCompModelBuildWorker(object):
                         logger.info("%s SMILES for %s and %s differ with unmapped protons", procName, targetId, matchId)
                         logger.debug("Ref %-8s SMILES: %s", targetId, refFD["SMILES_STEREO"])
                         logger.debug("Fit %-8s SMILES: %s", matchId, fitFD["SMILES_STEREO"])
+
                     # --------- ----------------
                     #  Accept the match
                     # --------- ----------------
@@ -148,9 +164,11 @@ class ChemCompModelBuildWorker(object):
                     modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=False)
                     logger.debug("targetId %r modelId %r modelPath %r", targetId, modelId, modelPath)
                     #
-                    logger.info(
-                        "%s accepted (smilesMatch %r hasUnmapped %r (%d) unMappedOk %r nAtomsRef %d nAtomsFit %d mapped fit %d) for %s with %s",
+                    logger.isEnabledFor(
+                        "%s accepted for %s with %s (smilesMatch %r hasUnmapped %r (%d) unMappedOk %r nAtomsRef %d nAtomsFit %d mapped fit %d) ",
                         procName,
+                        targetId,
+                        matchId,
                         smilesMatch,
                         hasUnMapped,
                         len(fitAtomUnMappedL),
@@ -158,8 +176,6 @@ class ChemCompModelBuildWorker(object):
                         nAtomsRef,
                         nAtomsFit,
                         len(fitXyzMapD),
-                        targetId,
-                        matchId,
                     )
                     ok, variantType = self.__writeModel(targetId, targetCifPath, fitFD, fitXyzMapD, fitAtomUnMappedL, matchObj, modelId, modelPath)
                     if ok:
@@ -217,7 +233,7 @@ class ChemCompModelBuildWorker(object):
             return "tautomer_protomer"
         return ""
 
-    def __alignModelMcss(self, ccRefPath, molFitPath, alignType="exact", fitTitle=None, refTitle=None, unique=False, minFrac=0.9, verbose=False):
+    def __alignModelMcss(self, ccRefPath, molFitPath, alignType="stict", fitTitle=None, refTitle=None, unique=False, minFrac=0.9, verbose=False):
         """Align (substructure) chemical component definition search target with the candidate matching reference molecule.
 
         Args:

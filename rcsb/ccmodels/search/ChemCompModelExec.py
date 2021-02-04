@@ -46,6 +46,7 @@ def main():
     parser.add_argument("--update_only", default=False, action="store_true", help="Only update current search results")
     #
     parser.add_argument("--build", default=False, action="store_true", help="Build models from CCDC search results")
+    parser.add_argument("--build_align_type", default=False, action=None, help="Alignment criteria (default: graph-relaxed-stereo")
     parser.add_argument("--assemble", default=False, action="store_true", help="Assemble models into a concatenated file")
     parser.add_argument("--max_r_factor", default=10.0, help="Maximum permissible R-value (default=10.0)")
     #
@@ -56,6 +57,7 @@ def main():
     parser.add_argument("--num_proc", default=2, help="Number of processes to execute (default=2)")
     parser.add_argument("--chunk_size", default=10, help="Number of files loaded per process")
     parser.add_argument("--verbose", default=False, action="store_true", help="Verbose output")
+
     args = parser.parse_args()
     #
     try:
@@ -82,6 +84,7 @@ def main():
         doAssemble = args.assemble
         maxRFactor = args.max_r_factor
         verbose = args.verbose
+        alignType = args.build_align_type if args.build_align_type else "graph-relaxed-stereo"
     except Exception as e:
         logger.exception("Argument processing problem %s", str(e))
         parser.print_help(sys.stderr)
@@ -118,7 +121,7 @@ def main():
 
         if doBuild:
             ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
-            rD = ccmb.build(alignType="relaxed-stereo", numProc=numProc, chunkSize=chunkSize, verbose=verbose)
+            rD = ccmb.build(alignType=alignType, numProc=numProc, chunkSize=chunkSize, verbose=verbose)
             logger.info("Built model count %d", len(rD))
 
         if doAssemble:
