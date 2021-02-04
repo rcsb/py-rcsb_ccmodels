@@ -1,15 +1,15 @@
 ##
 #
-# File:    testChemCompModelBuild.py
+# File:    testChemCompModelAssemble.py
 # Author:  J. Westbrook
-# Date:    19-Jan-2021
+# Date:    4-Feb-2021
 # Version: 0.001
 #
 # Updated:
 #
 ##
 """
-Test cases for to build models from CCDC search results in the chemical component model workflow.
+Test cases for to assemble models from CCDC search results in the chemical component model workflow.
 
 """
 __docformat__ = "restructuredtext en"
@@ -25,7 +25,7 @@ import os.path
 import platform
 import resource
 
-from rcsb.ccmodels.search.ChemCompModelBuild import ChemCompModelBuild
+from rcsb.ccmodels.search.ChemCompModelAssemble import ChemCompModelAssemble
 
 from rcsb.ccmodels.search import __version__
 
@@ -38,7 +38,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-class ChemCompModelBuildTests(unittest.TestCase):
+class ChemCompModelAssembleTests(unittest.TestCase):
     def setUp(self):
         self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
         self.__prefix = "abbrev"
@@ -55,27 +55,25 @@ class ChemCompModelBuildTests(unittest.TestCase):
         endTime = time.time()
         logger.info("Completed %s at %s (%.4f seconds)", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - self.__startTime)
 
-    def testBuildWorkflow(self):
+    def testAssembleWorkflow(self):
         """Test case: model build workflow step"""
         try:
-            ccmb = ChemCompModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
-            rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=2, chunkSize=2)
-            logger.info("Matched search ids %r", list(rD.keys()))
-            self.assertGreaterEqual(len(rD), 4)
-            qD = ccmb.fetchModelIndex()
-            self.assertEqual(len(rD), len(qD))
+            ccma = ChemCompModelAssemble(cachePath=self.__cachePath, prefix=self.__prefix)
+            ok = ccma.assemble(maxRFactor=10.0)
+            self.assertTrue(ok)
+
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             self.fail()
 
 
-def suiteBuildTests():
+def suiteAssembleTests():
     suiteSelect = unittest.TestSuite()
-    suiteSelect.addTest(ChemCompModelBuildTests("testBuildWorkflow"))
+    suiteSelect.addTest(ChemCompModelAssembleTests("testAssembleWorkflow"))
     return suiteSelect
 
 
 if __name__ == "__main__":
     #
-    mySuite = suiteBuildTests()
+    mySuite = suiteAssembleTests()
     unittest.TextTestRunner(verbosity=2).run(mySuite)
