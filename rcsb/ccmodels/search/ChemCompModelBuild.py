@@ -164,7 +164,7 @@ class ChemCompModelBuildWorker(object):
                     modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=False)
                     logger.debug("targetId %r modelId %r modelPath %r", targetId, modelId, modelPath)
                     #
-                    logger.isEnabledFor(
+                    logger.info(
                         "%s accepted for %s with %s (smilesMatch %r hasUnmapped %r (%d) unMappedOk %r nAtomsRef %d nAtomsFit %d mapped fit %d) ",
                         procName,
                         targetId,
