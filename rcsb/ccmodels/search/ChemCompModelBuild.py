@@ -684,6 +684,7 @@ class ChemCompModelBuildWorker(object):
                 tV = vS.upper()
                 try:
                     if tV.endswith("DEG.C"):
+                        tV = tV.replace("AT", "")
                         tV = tV.replace("DEG.C", "")
                         tV = float(tV.strip())
                         tV = tV + 273.15
