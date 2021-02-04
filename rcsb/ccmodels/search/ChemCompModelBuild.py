@@ -677,9 +677,14 @@ class ChemCompModelBuildWorker(object):
             if v is not None and len(vS) > 0:
                 tV = vS.upper()
                 try:
-                    tV = tV.replace("AT ", "")
-                    tV = tV.replace(" K", "")
-                    tV = float(tV)
+                    if tV.endswith("DEG.C"):
+                        tV = tV.replace("DEG.C", "")
+                        tV = float(tV.strip())
+                        tV = tV + 273.15
+                    else:
+                        tV = tV.replace("AT", "")
+                        tV = tV.replace("K", "")
+                        tV = float(tV.strip())
                     featureD["experiment_temperature"] = tV
                 except Exception as e:
                     logger.exception("Temperature conversion fails for %s (%r) with %s", modelId, vS, tV)
@@ -696,7 +701,7 @@ class ChemCompModelBuildWorker(object):
             #
             if matchObj.getRadiationSource() in ["Neutron"]:
                 featureD["neutron_radiation_experiment"] = True
-            if matchObj.getHasDisorder():
+            if matchObj.getHasDisorder() in ["Y"]:
                 featureD["has_disorder"] = True
             #
             if len(unMappedTypeD) == 1 and "H" in unMappedTypeD:
