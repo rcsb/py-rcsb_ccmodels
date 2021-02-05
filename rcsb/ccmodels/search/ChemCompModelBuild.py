@@ -192,6 +192,7 @@ class ChemCompModelBuildWorker(object):
                                 "searchId": targetId,
                                 "parentId": parentId,
                                 "matchId": matchId,
+                                "matchDB": "CSD",
                                 "modelPath": modelPath,
                                 "rFactor": matchObj.getRFactor(),
                                 "hasDisorder": hd if hd else "N",
