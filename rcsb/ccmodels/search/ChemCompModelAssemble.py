@@ -61,6 +61,7 @@ class ChemCompModelAssemble(object):
             mDLS = sorted(mDL, key=itemgetter("priorModelId", "variantType", "rFactor"), reverse=False)
 
             numStd = 0
+            matchIdD = {}
             for mD in mDLS:
                 isStd = False
                 if mD["variantType"].startswith("A"):
@@ -73,6 +74,13 @@ class ChemCompModelAssemble(object):
                 if numStd and not isStd:
                     logger.info("Skipping model %s isStd (%r) numStd (%d)", mD["modelId"], isStd, numStd)
                     continue
+                #
+                # Exclude duplicate matches in priority order ...
+                if mD["matchId"] in matchIdD:
+                    logger.info("Skipping duplicate matchId %r in %r", mD["matchId"], mD["modelId"])
+                    continue
+                #
+                matchIdD[mD["matchId"]] = True
 
                 cL = mU.doImport(mD["modelPath"], fmt="mmcif")
                 logger.debug("Read %d from %s", len(cL), mD["modelPath"])
@@ -132,6 +140,9 @@ class ChemCompModelAssemble(object):
                     priorDate = priorMatch["audit_list"][-1]["audit_date"]
                     # compare with current matches
                     numMatch = 0
+                    #
+                    for mD in mDL:
+                        mD["priorModelId"] = "Znone"
                     for mD in mDL:
                         curDbName = "CSD"
                         # curDbName = mD["matchDb"]
@@ -140,8 +151,6 @@ class ChemCompModelAssemble(object):
                             numMatch += 1
                             mD["priorModelId"] = priorModelId
                             mD["priorMatchDate"] = priorDate
-                        else:
-                            mD["priorModelId"] = "Znone"
                     if numMatch:
                         logger.info("%s has prior matches (%d)", pId, numMatch)
             else:
