@@ -307,7 +307,7 @@ class ChemCompModelAssemble(object):
                 cObj = dataContainer.getObj(tup[0])
                 cObj.replaceValue(oldModelId, newModelId, tup[1])
         except Exception as e:
-            logger.exception("Failing with %s", str(e))
+            logger.exception("Failing for %r and %r with %s", oldModelId, newModelId, str(e))
         return dataContainer
 
     def __updateAuditDate(self, dataContainer, auditDate):
@@ -323,7 +323,7 @@ class ChemCompModelAssemble(object):
             ii = cObj.getRowCount()
             cObj.setValue(auditDate, "date", ii - 1)
         except Exception as e:
-            logger.exception("Failing with %s", str(e))
+            logger.exception("Failing for %r with %s", auditDate, str(e))
         return dataContainer
 
     def __getToday(self):
