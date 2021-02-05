@@ -18,6 +18,7 @@ import os
 import sys
 
 from rcsb.ccmodels.search import __version__
+from rcsb.ccmodels.search.ChemCompModelAssemble import ChemCompModelAssemble
 from rcsb.ccmodels.search.ChemCompModelBuild import ChemCompModelBuild
 from rcsb.ccmodels.search.ChemCompModelGen import ChemCompModelGen
 from rcsb.ccmodels.search.ChemCompModelSearch import ChemCompModelSearch
@@ -125,7 +126,7 @@ def main():
             logger.info("Built model count %d", len(rD))
 
         if doAssemble:
-            ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
+            ccmb = ChemCompModelAssemble(cachePath=cachePath, prefix=prefix)
             numAssem = ccmb.assemble(maxRFactor=maxRFactor)
             logger.info("Assembled model count %d", numAssem)
 
