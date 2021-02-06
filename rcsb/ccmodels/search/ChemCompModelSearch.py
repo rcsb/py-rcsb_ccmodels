@@ -43,7 +43,7 @@ class ChemCompModelSearch(object):
         dN = "cc-%s-result-files" % self.__prefix if self.__prefix else "cc-result-files"
         return os.path.join(self.__cachePath, dN)
 
-    def search(self, searchType, updateOnly=False, numProc=2, chunkSize=10, fileType="sdf"):
+    def search(self, searchType, updateOnly=False, numProc=2, chunkSize=10, fileType="sdf", timeOut=240):
         """Run the CCDC search step in chemical component model workflow.
 
         Args:
@@ -52,6 +52,7 @@ class ChemCompModelSearch(object):
             numProc (int, optional): number of processors to invoke. Defaults to 2.
             chunkSize (int, optional): incremental chunk size for each subprocess. Defaults to 10.
             fileType (str, optional): molecule file format (sdf|mol2) default: sdf
+            timeOut (int, optional): search time out (seconds).  defaults 240
 
         Returns:
             (list): searchId list for successful searches
@@ -72,7 +73,7 @@ class ChemCompModelSearch(object):
 
             if pL:
                 csmp = CcdcSearchExecMp(pythonRootPath=self.__pythonRootPath, csdHome=self.__csdHome)
-                resultL = csmp.runSearch(pL, resultDirPath, searchType=searchType, numProc=numProc, chunkSize=chunkSize)
+                resultL = csmp.runSearch(pL, resultDirPath, searchType=searchType, numProc=numProc, chunkSize=chunkSize, timeOut=timeOut)
                 for result in resultL:
                     bfn, _ = os.path.splitext(os.path.basename(result))
                     rL.append(bfn)

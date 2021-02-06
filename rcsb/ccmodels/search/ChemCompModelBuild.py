@@ -109,7 +109,7 @@ class ChemCompModelBuildWorker(object):
                     if nAtomsRef == 0 and nAtomsFit == 0:
                         logger.info("%s alignment fails for %s with %s", procName, targetId, matchId)
                         continue
-                    elif isSkipped:
+                    if isSkipped:
                         logger.info("%s alignment skipped for %s (%d) with %s (%d)", procName, targetId, nAtomsRef, matchId, nAtomsFit)
                         continue
 
@@ -132,6 +132,8 @@ class ChemCompModelBuildWorker(object):
                     else:
                         pass
 
+                    if len(fitXyzMapD) < 2:
+                        acceptOk = False
                     #
                     if not acceptOk:
                         logger.info(

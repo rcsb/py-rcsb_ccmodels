@@ -8,6 +8,8 @@
 ##
 """
 Assemble model files and adjust audit records for the chemical component model workflow.
+Models identifiers and audit creation dates are reconciled with the audit details of the
+prior public model collection.
 
 """
 __docformat__ = "restructuredtext en"
@@ -31,9 +33,10 @@ logger = logging.getLogger(__name__)
 
 
 class ChemCompModelAssemble(object):
-    def __init__(self, cachePath, prefix=None):
+    def __init__(self, cachePath, prefix=None, urlTarget=None):
         self.__cachePath = cachePath
         self.__prefix = prefix
+        self.__urlTarget = urlTarget
         #
         self.__ccmb = ChemCompModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
         # self.__startTime = time.time()
@@ -88,6 +91,7 @@ class ChemCompModelAssemble(object):
                 if not mD["priorModelId"].startswith("Z"):
                     priorMapD[mD["modelId"]] = (mD["priorModelId"], mD["priorMatchDate"])
         #
+        logger.debug("priorMapD %r", priorMapD)
         fn = "chem_comp_models-%s.cif" % self.__getToday()
         assembleModelPath = os.path.join(self.__ccmb.getModelDirFilePath(), fn)
         # -- relabel
@@ -104,7 +108,7 @@ class ChemCompModelAssemble(object):
                 self.__replaceModelId(dataContainer, tModelId, priorMapD[tModelId][0])
                 self.__updateAuditDate(dataContainer, priorMapD[tModelId][1])
                 parentModelCountD[pId] = sorted(priorIdLD[pId])[-1]
-                logger.info("%s current model %r prior model %r count %d", pId, tModelId, priorMapD[tModelId][0], parentModelCountD[pId])
+                logger.debug("%s current model %r prior model %r count %d", pId, tModelId, priorMapD[tModelId][0], parentModelCountD[pId])
             else:
                 parentModelCountD[pId] += 1
                 pModelId = self.__makePublicModelId(pId, parentModelCountD[pId])
@@ -124,7 +128,10 @@ class ChemCompModelAssemble(object):
              aL.append({"audit_date": auditDate, "action_type": auditAction})
              rD.setdefault(ccId, []).append({"model_id": modelId, "db_name": dbName, "db_code": dbCode, "audit_list": aL})
         """
-        ccm = ChemCompModelProvider(cachePath=self.__cachePath, useCache=False)
+        if self.__urlTarget:
+            ccm = ChemCompModelProvider(cachePath=self.__cachePath, useCache=False, urlTarget=self.__urlTarget)
+        else:
+            ccm = ChemCompModelProvider(cachePath=self.__cachePath, useCache=False)
         rD = ccm.getAuditDetails()
         return rD
 
@@ -132,17 +139,17 @@ class ChemCompModelAssemble(object):
         """"""
         priorMatchLD = self.__getAuditDetails()
         for pId, mDL in modelIndexD.items():
+            for mD in mDL:
+                mD["priorModelId"] = "Znone"
             if pId in priorMatchLD:
+                logger.debug("priorMatchLD %r", priorMatchLD[pId])
+                numMatch = 0
                 for priorMatch in priorMatchLD[pId]:
                     priorModelId = priorMatch["model_id"]
                     priorDbName = priorMatch["db_name"]
                     priorDbCode = priorMatch["db_code"]
                     priorDate = priorMatch["audit_list"][-1]["audit_date"]
                     # compare with current matches
-                    numMatch = 0
-                    #
-                    for mD in mDL:
-                        mD["priorModelId"] = "Znone"
                     for mD in mDL:
                         curDbName = "CSD"
                         # curDbName = mD["matchDb"]
@@ -151,11 +158,8 @@ class ChemCompModelAssemble(object):
                             numMatch += 1
                             mD["priorModelId"] = priorModelId
                             mD["priorMatchDate"] = priorDate
-                    if numMatch:
-                        logger.info("%s has prior matches (%d)", pId, numMatch)
-            else:
-                for mD in mDL:
-                    mD["priorModelId"] = "Znone"
+                if numMatch:
+                    logger.info("%s has prior matches (%d)", pId, numMatch)
         return modelIndexD
 
     def __updateVariantDetails(self, modelIndexD):
@@ -169,65 +173,6 @@ class ChemCompModelAssemble(object):
     def __makePublicModelId(self, parentId, modelNum=1):
         modelId = "M_" + parentId + "_%05d" % modelNum
         return modelId
-
-    #  deprecated version
-    def __assembleX(self, maxRFactor=10.0):
-        """Concatenate models into the input file path subject to the R value constraint.
-        Relabel the models sequentially for each parent chemical component.
-
-        Args:
-            assembleModelPath (str): path for concatenated model file
-            maxRFactor (float, optional): limiting R-value. Defaults to 10.0.
-
-        Returns:
-            (bool): True for success or False otherwise
-        """
-        dataContainerL = []
-        mU = MarshalUtil(workPath=self.__cachePath)
-        modelIndexD = self.__ccmb.fetchModelIndex()
-        for _, mDL in modelIndexD.items():
-            mDLS = sorted(mDL, key=itemgetter("rFactor"), reverse=False)
-            # check for non variant matches
-            modelIdSelectL = []
-            for mD in mDLS:
-                if not mD["variantType"]:
-                    modelIdSelectL.append(mD["modelId"])
-            if modelIdSelectL:
-                # cannonical models first -
-                for mD in mDLS:
-                    if mD["modelId"] in modelIdSelectL:
-                        if mD["rFactor"] < maxRFactor:
-                            cL = mU.doImport(mD["modelPath"], fmt="mmcif")
-                            logger.debug("Read %d from %s", len(cL), mD["modelPath"])
-                            dataContainerL.extend(cL)
-                        else:
-                            logger.info("Rejected cannonical model %s", mD["modelId"])
-            else:
-                # then tautomer/protomer models
-                for mD in mDLS:
-                    if mD["rFactor"] < maxRFactor:
-                        cL = mU.doImport(mD["modelPath"], fmt="mmcif")
-                        logger.debug("Read %d from %s", len(cL), mD["modelPath"])
-                        dataContainerL.extend(cL)
-                    else:
-                        logger.info("Rejected variant model %s", mD["modelId"])
-        #
-        fn = "chem_comp_models-%s.cif" % self.__getToday()
-        assembleModelPath = os.path.join(self.__ccmb.getModelDirFilePath(), fn)
-        # -- relabel
-        parentModelCountD = defaultdict(int)
-        for dataContainer in dataContainerL:
-            tModelId = dataContainer.getName()
-            tId = tModelId.split("_")[1]
-            pId = tId.split("|")[0]
-            parentModelCountD[pId] += 1
-            pModelId = self.__makePublicModelId(pId, parentModelCountD[pId])
-            self.__replaceModelId(dataContainer, tModelId, pModelId)
-        # -- relabel
-        ok = mU.doExport(assembleModelPath, dataContainerL, fmt="mmcif")
-        logger.info("Assembled %d models status %r", len(dataContainerL), ok)
-        self.__checkAssembledModels(assembleModelPath)
-        return len(dataContainerL)
 
     def __checkAssembledModels(self, assembleModelPath):
         catNameL = [
@@ -301,13 +246,14 @@ class ChemCompModelAssemble(object):
             ("pdbx_chem_comp_model_feature", "model_id"),
             ("pdbx_chem_comp_model_audit", "model_id"),
         ]
+        tup = ()
         try:
             dataContainer.setName(newModelId)
             for tup in updateL:
                 cObj = dataContainer.getObj(tup[0])
                 cObj.replaceValue(oldModelId, newModelId, tup[1])
         except Exception as e:
-            logger.exception("Failing for %r and %r with %s", oldModelId, newModelId, str(e))
+            logger.exception("Failing for cat %r %r and %r with %s", tup, oldModelId, newModelId, str(e))
         return dataContainer
 
     def __updateAuditDate(self, dataContainer, auditDate):

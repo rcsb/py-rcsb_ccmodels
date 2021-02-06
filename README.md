@@ -9,6 +9,7 @@ This package provides workflow utilities for generating search targets for RCSB
 chemical component defintions, performing substructure searches on the CCDC database for
 each search target, evaluating the these search results and building chemical component
 structural models, and assembling selected models into a concatenated model dictionary.
+
 This module depends on the RCSB CCDC wrapper module `py-rcsb_utils_ccdc` which in turn
 depends on the proprietary CCDC Python API and CCDC/CSD database.
 The latter dependencies require licenses and separate installation that is described
@@ -47,6 +48,8 @@ export LD_LIBRARY_PATH=$PYROOT/lib:$PYROOT/lib/python3.7/site-packages/ccdc/_lib
 export DYLD_LIBRARY_PATH=$PYROOT/lib/python3.7/site-packages/ccdc/_lib
 export DYLD_FRAMEWORK_PATH=$PYROOT/lib/python3.7/site-packages/ccdc/_lib
 ```
+
+To install the packages from the source repository, follow these steps:
 
 ```bash
 # Install the wrapper package
@@ -137,7 +140,9 @@ An example workflow script would look like the following:
 ```bash
 #!/bin/bash
 #
+echo "Setup environment"
 . ./ccdc-api-env.sh
+#
 echo "Begin search file generation"
 cc_models_cli --generate --num_proc 6 --cache_path ./CACHE
 #

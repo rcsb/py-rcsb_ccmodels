@@ -47,9 +47,10 @@ def main():
     parser.add_argument("--update_only", default=False, action="store_true", help="Only update current search results")
     #
     parser.add_argument("--build", default=False, action="store_true", help="Build models from CCDC search results")
-    parser.add_argument("--build_align_type", default=False, action=None, help="Alignment criteria (default: graph-relaxed-stereo")
+    parser.add_argument("--build_align_type", default=False, action=None, help="Alignment criteria (default: graph-relaxed-stereo-sdeq")
+    #
     parser.add_argument("--assemble", default=False, action="store_true", help="Assemble models into a concatenated file")
-    parser.add_argument("--max_r_factor", default=10.0, help="Maximum permissible R-value (default=10.0)")
+    parser.add_argument("--max_r_factor", default=10.0, help="Maximum permissible R-value in assembled model file (default=10.0)")
     #
     parser.add_argument("--csdhome", default=None, help="Path to the CSD release (path to CSD_202x)")
     parser.add_argument("--python_lib_path", default=None, help="Path to Python library")
@@ -57,6 +58,8 @@ def main():
     #
     parser.add_argument("--num_proc", default=2, help="Number of processes to execute (default=2)")
     parser.add_argument("--chunk_size", default=10, help="Number of files loaded per process")
+    parser.add_argument("--search_timeout", default=240, help="Search timeout (seconds) default=240")
+
     parser.add_argument("--verbose", default=False, action="store_true", help="Verbose output")
 
     args = parser.parse_args()
@@ -85,7 +88,8 @@ def main():
         doAssemble = args.assemble
         maxRFactor = args.max_r_factor
         verbose = args.verbose
-        alignType = args.build_align_type if args.build_align_type else "graph-relaxed-stereo"
+        alignType = args.build_align_type if args.build_align_type else "graph-relaxed-stereo-sdeq"
+        searchTimeOut = int(args.search_timeout)
     except Exception as e:
         logger.exception("Argument processing problem %s", str(e))
         parser.print_help(sys.stderr)
@@ -117,7 +121,7 @@ def main():
 
         if doSearch:
             ccms = ChemCompModelSearch(cachePath=cachePath, pythonRootPath=pyRoot, csdHome=csdHome, prefix=prefix)
-            rL = ccms.search(searchType, updateOnly=updateOnly, numProc=numProc, chunkSize=chunkSize)
+            rL = ccms.search(searchType, updateOnly=updateOnly, numProc=numProc, chunkSize=chunkSize, timeOut=searchTimeOut)
             logger.info("Search success count %d", len(rL))
 
         if doBuild:

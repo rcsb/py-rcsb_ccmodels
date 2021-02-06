@@ -64,8 +64,8 @@ class ChemCompModelGenTests(unittest.TestCase):
             useCache=False,
             limitPerceptions=False,
         )
-        # For 143 limitPerceptions=False  and 160 for limitPerceptions=True
-        self.assertGreaterEqual(numMols, 143)
+        # For 156 limitPerceptions=False  and 160 for limitPerceptions=True
+        self.assertGreaterEqual(numMols, 155)
 
     @unittest.skipIf(skipFlag, "Build search targets for the full dictionary - troubleshooting test")
     def testBuildMoleculeCacheFilesFull(self):

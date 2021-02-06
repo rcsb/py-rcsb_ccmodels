@@ -88,7 +88,8 @@ class CcdcSearchExecWorker(object):
 
             logger.debug("cmdPath %r", cmdPath)
             ok = exU.runShell(
-                "%s --mol_list_path %s --result_path %s --search_type %s --csdhome %s --hit_list_path %s" % (cmdPath, queryListFilePath, resultPath, searchType, csdHome, hitListPath),
+                "%s --mol_list_path %s --result_path %s --search_type %s --csdhome %s --hit_list_path %s"
+                % (cmdPath, queryListFilePath, resultPath, searchType, csdHome, hitListPath),
                 outPath=logPath,
                 outAppend=True,
                 timeOut=timeOut,

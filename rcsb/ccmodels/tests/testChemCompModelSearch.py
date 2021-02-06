@@ -39,6 +39,8 @@ logger.setLevel(logging.INFO)
 
 
 class ChemCompModelSearchTests(unittest.TestCase):
+    skipFlag = True
+
     def setUp(self):
         self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
         self.__prefix = "abbrev"
@@ -63,9 +65,21 @@ class ChemCompModelSearchTests(unittest.TestCase):
         """Test case: CCDC substructure search workflow step"""
         try:
             ccms = ChemCompModelSearch(cachePath=self.__cachePath, pythonRootPath=self.__pythonRootPath, csdHome=self.__csdHome, prefix=self.__prefix)
-            rL = ccms.search(self.__searchType, updateOnly=False, numProc=self.__numProc, chunkSize=self.__chunkSize)
+            rL = ccms.search(self.__searchType, updateOnly=False, numProc=self.__numProc, chunkSize=self.__chunkSize, timeOut=360)
             logger.info("Search success list (%d) %r", len(rL), rL)
-            self.assertGreaterEqual(len(rL), 9)
+            self.assertGreaterEqual(len(rL), 18)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+            self.fail()
+
+    @unittest.skipIf(skipFlag, "Updte search targets - troubleshooting test")
+    def testSearchUpdateWorkflow(self):
+        """Test case: CCDC substructure search update workflow step"""
+        try:
+            ccms = ChemCompModelSearch(cachePath=self.__cachePath, pythonRootPath=self.__pythonRootPath, csdHome=self.__csdHome, prefix=self.__prefix)
+            rL = ccms.search(self.__searchType, updateOnly=True, numProc=self.__numProc, chunkSize=self.__chunkSize, timeOut=360)
+            logger.info("Update search success list (%d) %r", len(rL), rL)
+            self.assertGreaterEqual(len(rL), 0)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             self.fail()

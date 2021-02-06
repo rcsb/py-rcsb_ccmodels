@@ -41,6 +41,7 @@ logger.setLevel(logging.INFO)
 class ChemCompModelAssembleTests(unittest.TestCase):
     def setUp(self):
         self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
+        self.__urlTarget = os.path.join(HERE, "test-data", "chem_comp_models.cif")
         self.__prefix = "abbrev"
         self.__numProc = 2
         self.__chunkSize = 5
@@ -56,11 +57,11 @@ class ChemCompModelAssembleTests(unittest.TestCase):
         logger.info("Completed %s at %s (%.4f seconds)", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - self.__startTime)
 
     def testAssembleWorkflow(self):
-        """Test case: model build workflow step"""
+        """Test case: model assemble workflow step"""
         try:
-            ccma = ChemCompModelAssemble(cachePath=self.__cachePath, prefix=self.__prefix)
-            ok = ccma.assemble(maxRFactor=10.0)
-            self.assertTrue(ok)
+            ccma = ChemCompModelAssemble(cachePath=self.__cachePath, prefix=self.__prefix, urlTarget=self.__urlTarget)
+            numC = ccma.assemble(maxRFactor=10.0)
+            self.assertGreaterEqual(numC, 131)
 
         except Exception as e:
             logger.exception("Failing with %s", str(e))

@@ -11,3 +11,4 @@
  3-Feb-2021 - V0.18 Simplify the build alignment criteria, add cli criteria option, and improve the handling of aromatic bond matching
  5-Feb-2021 - V0.19 Make assemble respect prior modelId assignments.
  5-Feb-2021 - V0.20 Add assemble workflow to cli in ChemCompModelExec()
+ 6-Feb-2021 - V0.21 Fix accession and audit reconciliation with prior model collections

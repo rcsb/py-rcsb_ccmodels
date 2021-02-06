@@ -61,7 +61,7 @@ class ChemCompModelBuildTests(unittest.TestCase):
             ccmb = ChemCompModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
             rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=2, chunkSize=2)
             logger.info("Matched search ids %r", list(rD.keys()))
-            self.assertGreaterEqual(len(rD), 4)
+            self.assertGreaterEqual(len(rD), 9)
             qD = ccmb.fetchModelIndex()
             self.assertEqual(len(rD), len(qD))
         except Exception as e:
