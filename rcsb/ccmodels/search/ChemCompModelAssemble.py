@@ -99,12 +99,11 @@ class ChemCompModelAssemble(object):
         priorIdLD = {}
         for dataContainer in dataContainerL:
             tModelId = dataContainer.getName()
-            tId = tModelId.split("_")[1]
+            tId = self.__parseId(tModelId)[0]
             pId = tId.split("|")[0]
-            # tCount = tModelId.split("_")[2]
             if tModelId in priorMapD:
-                pCount = priorMapD[tModelId][0].split("_")[2]
-                priorIdLD.setdefault(pId, []).append(int(pCount))
+                pCount = self.__parseId(priorMapD[tModelId][0])[1]
+                priorIdLD.setdefault(pId, []).append(pCount)
                 self.__replaceModelId(dataContainer, tModelId, priorMapD[tModelId][0])
                 self.__updateAuditDate(dataContainer, priorMapD[tModelId][1])
                 parentModelCountD[pId] = sorted(priorIdLD[pId])[-1]
@@ -118,6 +117,30 @@ class ChemCompModelAssemble(object):
         logger.info("Assembled %d models status %r", len(dataContainerL), ok)
         self.__checkAssembledModels(assembleModelPath)
         return len(dataContainerL)
+
+    def __parseId(self, modelId):
+        """Parse the input model identifier and return component/PRD id and model count.
+
+        Args:
+            modelId (str): model identifier for chemical component or BIRD
+
+        Returns:
+            (str, str): component/bird, model count
+        """
+        mId = None
+        mCount = None
+        try:
+            ff = modelId.split("_")
+            if len(ff) == 3:
+                mId = ff[1]
+                mCount = int(ff[2])
+            elif len(ff) == 4:
+                mId = "_".join(ff[1:2])
+                mCount = int(ff[3])
+        except Exception as e:
+            logger.exception("Failing for %r with %s", modelId, str(e))
+        #
+        return (mId, mCount)
 
     def __getAuditDetails(self):
         """[summary]
@@ -196,7 +219,7 @@ class ChemCompModelAssemble(object):
                 logger.info("Duplicate container id %r", nm)
                 cnD[nm] = True
             #
-            pId = nm.split("_")[1]
+            pId = self.__parseId(nm)[0]
             cObj = dataContainer.getObj("pdbx_chem_comp_model")
             modelId = cObj.getValue("id", 0)
             if modelId != nm:
@@ -225,7 +248,7 @@ class ChemCompModelAssemble(object):
                 for tD in tDL:
                     minV = min(minV, tD[catName])
                     maxV = max(maxV, tD[catName])
-                if maxV - minV > 1 and catName not in ["pdbx_chem_comp_model_feature"]:
+                if maxV - minV > 2 and catName not in ["pdbx_chem_comp_model_feature"]:
                     logger.error("%s %s row count inconsistency %d %d", pId, catName, minV, maxV)
 
     def __replaceModelId(self, dataContainer, oldModelId, newModelId):

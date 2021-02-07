@@ -12,3 +12,4 @@
  5-Feb-2021 - V0.19 Make assemble respect prior modelId assignments.
  5-Feb-2021 - V0.20 Add assemble workflow to cli in ChemCompModelExec()
  6-Feb-2021 - V0.21 Fix accession and audit reconciliation with prior model collections
+ 7-Feb-2021 - V0.22 Adjustments for handling BIRD style identifier and corrections to checking method.
