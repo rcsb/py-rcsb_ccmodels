@@ -135,7 +135,7 @@ class ChemCompModelAssemble(object):
                 mId = ff[1]
                 mCount = int(ff[2])
             elif len(ff) == 4:
-                mId = "_".join(ff[1:2])
+                mId = "_".join(ff[1:3])
                 mCount = int(ff[3])
         except Exception as e:
             logger.exception("Failing for %r with %s", modelId, str(e))
