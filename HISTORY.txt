@@ -16,3 +16,4 @@
  7-Feb-2021 - V0.23 Adjustments to identifier parsing method in ChemCompModelAssemble()
  9-Mar-2021 - V0.24 Add CODModelSearch and CODModelBuild modules
 10-Mar-2021 - V0.25 Add multiprocessing methods for fetching COD data and entries
+10-Mar-2021 - V0.26 Add COD functions to ChemCompModelExec().

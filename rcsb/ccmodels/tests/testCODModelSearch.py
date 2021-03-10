@@ -33,7 +33,7 @@ logger = logging.getLogger()
 
 
 class CODModelSearchTests(unittest.TestCase):
-    abbrevTest = False
+    abbrevTest = True
 
     def setUp(self):
         self.__startTime = time.time()
@@ -64,8 +64,8 @@ class CODModelSearchTests(unittest.TestCase):
     def testSearchFilesFull(self):
         csU = CODModelSearch(cachePath=self.__cachePath, ccUrlTarget=self.__ccUrlTarget, birdUrlTarget=self.__birdUrlTarget, numProc=6, useCache=True)
         csU.updateDescriptors()
-        # numMols = csU.search(molLimit=2000)
-        # self.assertGreaterEqual(numMols, 500)
+        numMols = csU.search(molLimit=5000)
+        self.assertGreaterEqual(numMols, 500)
         numMols = csU.fetchMatchedDataMp(useCache=True)
         self.assertGreaterEqual(numMols, 100)
 

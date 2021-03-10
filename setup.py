@@ -47,7 +47,7 @@ setup(
     dependency_links=["https://pypi.anaconda.org/OpenEye/simple#egg=OpenEye-toolkits-2020.2.0"],
     install_requires=[
         "mmcif >= 0.61",
-        "rcsb.utils.io >= 0.99",
+        "rcsb.utils.io >= 1.01",
         "rcsb.utils.multiproc >= 0.18",
         "rcsb.utils.chem >= 0.65",
         "rcsb.utils.chemref >= 0.66",

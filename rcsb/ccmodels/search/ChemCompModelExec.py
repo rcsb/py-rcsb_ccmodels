@@ -22,6 +22,8 @@ from rcsb.ccmodels.search.ChemCompModelAssemble import ChemCompModelAssemble
 from rcsb.ccmodels.search.ChemCompModelBuild import ChemCompModelBuild
 from rcsb.ccmodels.search.ChemCompModelGen import ChemCompModelGen
 from rcsb.ccmodels.search.ChemCompModelSearch import ChemCompModelSearch
+from rcsb.ccmodels.search.CODModelBuild import CODModelBuild
+from rcsb.ccmodels.search.CODModelSearch import CODModelSearch
 
 # from rcsb.utils.io.MarshalUtil import MarshalUtil
 
@@ -35,7 +37,7 @@ logger = logging.getLogger()
 def main():
     parser = argparse.ArgumentParser()
     #
-    parser.add_argument("--generate", default=False, action="store_true", help="Generate searchable files")
+    parser.add_argument("--generate_ccdc", default=False, action="store_true", help="Generate CCDC searchable files")
     parser.add_argument("--cc_locator", default=None, help="Chemical component reference dictioanary locator")
     parser.add_argument("--bird_locator", default=None, help="BIRD reference dictioanary locator")
     parser.add_argument("--prefix", default=None, help="Prefix for identifying reference resource files (e.g. abbrev)")
@@ -43,11 +45,14 @@ def main():
     parser.add_argument("--use_cache", default=False, action="store_true", help="Re-use cached resource files")
     parser.add_argument("--limit_perceptions", default=False, action="store_true", help="Restrict automatic OE chemical perceptions")
     #
-    parser.add_argument("--search", default=False, action="store_true", help="Execute CCDC search")
+    parser.add_argument("--search_ccdc", default=False, action="store_true", help="Execute CCDC search")
     parser.add_argument("--update_only", default=False, action="store_true", help="Only update current search results")
     #
-    parser.add_argument("--build", default=False, action="store_true", help="Build models from CCDC search results")
+    parser.add_argument("--build_ccdc", default=False, action="store_true", help="Build models from CCDC search results")
     parser.add_argument("--build_align_type", default=False, action=None, help="Alignment criteria (default: graph-relaxed-stereo-sdeq")
+    #
+    parser.add_argument("--search_cod", default=False, action="store_true", help="Execute COD search")
+    parser.add_argument("--build_cod", default=False, action="store_true", help="Build models from COD search results")
     #
     parser.add_argument("--assemble", default=False, action="store_true", help="Assemble models into a concatenated file")
     parser.add_argument("--max_r_factor", default=10.0, help="Maximum permissible R-value in assembled model file (default=10.0)")
@@ -70,7 +75,7 @@ def main():
         pyVer = args.python_version if args.python_version else "3.7"
         csdHome = args.csdhome if args.csdhome else os.environ["CSDHOME"]
         #
-        doGen = args.generate
+        doGenCcdc = args.generate_ccdc
         ccLocator = args.cc_locator
         birdLocator = args.bird_locator
         prefix = args.prefix
@@ -80,11 +85,15 @@ def main():
         useCache = args.use_cache
         limitPerceptions = args.limit_perceptions
         #
-        doSearch = args.search
+        doSearchCcdc = args.search_ccdc
         searchType = "substructure"
         updateOnly = args.update_only
         #
-        doBuild = args.build
+        doBuildCcdc = args.build_ccdc
+        #
+        doSearchCod = args.search_cod
+        doBuildCod = args.build_cod
+        #
         doAssemble = args.assemble
         maxRFactor = args.max_r_factor
         verbose = args.verbose
@@ -106,7 +115,7 @@ def main():
         logger.info("Using DYLD_FRAMEWORK_PATH %s", os.environ["DYLD_FRAMEWORK_PATH"])
         logger.info("Using source version %s", __version__)
         # -----------
-        if doGen:
+        if doGenCcdc:
             ccmG = ChemCompModelGen(cachePath=cachePath, prefix=prefix)
             numMols = ccmG.buildSearchFiles(
                 ccUrlTarget=ccLocator,
@@ -119,14 +128,25 @@ def main():
             )
             logger.info("Generated %d search files using prefix %r", numMols, prefix)
 
-        if doSearch:
+        if doSearchCcdc:
             ccms = ChemCompModelSearch(cachePath=cachePath, pythonRootPath=pyRoot, csdHome=csdHome, prefix=prefix)
             rL = ccms.search(searchType, updateOnly=updateOnly, numProc=numProc, chunkSize=chunkSize, timeOut=searchTimeOut)
             logger.info("Search success count %d", len(rL))
 
-        if doBuild:
+        if doSearchCod:
+            csU = CODModelSearch(cachePath=cachePath, numProc=numProc, useCache=True)
+            csU.updateDescriptors()
+            numMols = csU.fetchMatchedDataMp(useCache=True)
+            logger.info("Search success count %d", numMols)
+
+        if doBuildCcdc:
             ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)
             rD = ccmb.build(alignType=alignType, numProc=numProc, chunkSize=chunkSize, verbose=verbose)
+            logger.info("Built model count %d", len(rD))
+
+        if doBuildCod:
+            ccmb = CODModelBuild(cachePath=cachePath, prefix=prefix)
+            rD = ccmb.build(alignType=alignType, numProc=numProc, chunkSize=chunkSize)
             logger.info("Built model count %d", len(rD))
 
         if doAssemble:

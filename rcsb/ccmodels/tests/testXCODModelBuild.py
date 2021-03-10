@@ -39,6 +39,8 @@ logger.setLevel(logging.INFO)
 
 
 class CODModelBuildTests(unittest.TestCase):
+    abbrevTest = True
+
     def setUp(self):
         self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
         self.__prefix = "abbrev"
@@ -61,22 +63,23 @@ class CODModelBuildTests(unittest.TestCase):
             ccmb = CODModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
             rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=2, chunkSize=2)
             logger.info("Matched search ids %r", list(rD.keys()))
-            # self.assertGreaterEqual(len(rD), 9)
+            self.assertGreaterEqual(len(rD), 1)
             qD = ccmb.fetchModelIndex()
-            # self.assertEqual(len(rD), len(qD))
+            self.assertEqual(len(rD), len(qD))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             self.fail()
 
+    @unittest.skipIf(abbrevTest, "Build search targets for the full dictionary - troubleshooting test")
     def testBuildWorkflow(self):
         """Test case: model build workflow step"""
         try:
             ccmb = CODModelBuild(cachePath=self.__cachePath, prefix=None)
             rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=6, chunkSize=5)
             logger.info("Matched search ids %r", list(rD.keys()))
-            # self.assertGreaterEqual(len(rD), 9)
+            self.assertGreaterEqual(len(rD), 5)
             qD = ccmb.fetchModelIndex()
-            # self.assertEqual(len(rD), len(qD))
+            self.assertEqual(len(rD), len(qD))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             self.fail()
