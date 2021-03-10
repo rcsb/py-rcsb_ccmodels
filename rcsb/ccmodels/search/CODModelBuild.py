@@ -265,7 +265,7 @@ class CODModelBuildWorker(object):
             return "tautomer_protomer"
         return ""
 
-    @timeout(120)
+    @timeout(60)
     def __alignModelSubStruct(self, ccRefObj, molFitPath, alignType="strict", fitTitle=None, refTitle=None, onlyCloseMatches=False, verbose=False, procName="main"):
         """Align (substructure) chemical component definition search target with the candidate matching reference molecule.
 
