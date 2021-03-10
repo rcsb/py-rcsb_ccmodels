@@ -143,13 +143,11 @@ class ChemCompModelAssemble(object):
         return (mId, mCount)
 
     def __getAuditDetails(self):
-        """[summary]
+        """Fetch the audit details from the current model dictionary file.
 
         Returns:
-            [type]: [description]
-
-             aL.append({"audit_date": auditDate, "action_type": auditAction})
-             rD.setdefault(ccId, []).append({"model_id": modelId, "db_name": dbName, "db_code": dbCode, "audit_list": aL})
+            (dict): {ccId: [{"model_id": modelId, "db_name": dbName, "db_code": dbCode, "audit_list": aL}]
+                    where aL = [{"audit_date": auditDate, "action_type": auditAction}]
         """
         if self.__urlTarget:
             ccm = ChemCompModelProvider(cachePath=self.__cachePath, useCache=False, urlTarget=self.__urlTarget)

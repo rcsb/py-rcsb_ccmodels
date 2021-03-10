@@ -1,15 +1,15 @@
 ##
 #
-# File:    testChemCompModelSearch.py
+# File:    testCODModelBuild.py
 # Author:  J. Westbrook
-# Date:    16-Jan-2021
+# Date:    19-Jan-2021
 # Version: 0.001
 #
 # Updated:
 #
 ##
 """
-Test cases for CCDC search step in chemical component model workflow.
+Test cases for to build models from COD search results in the chemical component model workflow.
 
 """
 __docformat__ = "restructuredtext en"
@@ -25,7 +25,7 @@ import os.path
 import platform
 import resource
 
-from rcsb.ccmodels.search.ChemCompModelSearch import ChemCompModelSearch
+from rcsb.ccmodels.search.CODModelBuild import CODModelBuild
 
 from rcsb.ccmodels.search import __version__
 
@@ -38,18 +38,12 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-class ChemCompModelSearchTests(unittest.TestCase):
-    skipFlag = True
-
+class CODModelBuildTests(unittest.TestCase):
     def setUp(self):
         self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
         self.__prefix = "abbrev"
         self.__numProc = 2
         self.__chunkSize = 5
-        self.__pythonRootPath = os.path.join(os.environ["CSD_PYTHON_ROOT_PATH"])
-        self.__csdHome = os.environ["CSDHOME"]
-        #
-        self.__searchType = "substructure"
         #
         self.__startTime = time.time()
         logger.info("Starting %s (%s) at %s", self.id(), __version__, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
@@ -61,37 +55,40 @@ class ChemCompModelSearchTests(unittest.TestCase):
         endTime = time.time()
         logger.info("Completed %s at %s (%.4f seconds)", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - self.__startTime)
 
-    def testSearchWorkflow(self):
-        """Test case: CCDC substructure search workflow step"""
+    def testBuildWorkflowAbbrev(self):
+        """Test case: model build workflow step"""
         try:
-            ccms = ChemCompModelSearch(cachePath=self.__cachePath, pythonRootPath=self.__pythonRootPath, csdHome=self.__csdHome, prefix=self.__prefix)
-            rL = ccms.search(self.__searchType, updateOnly=False, numProc=self.__numProc, chunkSize=self.__chunkSize, timeOut=360)
-            logger.info("Search success list (%d) %r", len(rL), rL)
-            self.assertGreaterEqual(len(rL), 18)
+            ccmb = CODModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
+            rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=2, chunkSize=2)
+            logger.info("Matched search ids %r", list(rD.keys()))
+            # self.assertGreaterEqual(len(rD), 9)
+            qD = ccmb.fetchModelIndex()
+            # self.assertEqual(len(rD), len(qD))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             self.fail()
 
-    @unittest.skipIf(skipFlag, "Update search targets - troubleshooting test")
-    def testSearchUpdateWorkflow(self):
-        """Test case: CCDC substructure search update workflow step"""
+    def testBuildWorkflow(self):
+        """Test case: model build workflow step"""
         try:
-            ccms = ChemCompModelSearch(cachePath=self.__cachePath, pythonRootPath=self.__pythonRootPath, csdHome=self.__csdHome, prefix=self.__prefix)
-            rL = ccms.search(self.__searchType, updateOnly=True, numProc=self.__numProc, chunkSize=self.__chunkSize, timeOut=360)
-            logger.info("Update search success list (%d) %r", len(rL), rL)
-            self.assertGreaterEqual(len(rL), 0)
+            ccmb = CODModelBuild(cachePath=self.__cachePath, prefix=None)
+            rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=6, chunkSize=5)
+            logger.info("Matched search ids %r", list(rD.keys()))
+            # self.assertGreaterEqual(len(rD), 9)
+            qD = ccmb.fetchModelIndex()
+            # self.assertEqual(len(rD), len(qD))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             self.fail()
 
 
-def suiteSearchTests():
+def suiteBuildTests():
     suiteSelect = unittest.TestSuite()
-    suiteSelect.addTest(ChemCompModelSearchTests("testSearchWorkflow"))
+    suiteSelect.addTest(CODModelBuildTests("testBuildWorkflow"))
     return suiteSelect
 
 
 if __name__ == "__main__":
     #
-    mySuite = suiteSearchTests()
+    mySuite = suiteBuildTests()
     unittest.TextTestRunner(verbosity=2).run(mySuite)

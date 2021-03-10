@@ -43,6 +43,17 @@ class ChemCompModelGen(object):
         dN = "cc-%s-search-files" % self.__prefix if self.__prefix else "cc-search-files"
         return os.path.join(self.__cachePath, dN, "search-file-index.json")
 
+    def getChemCompPath(self, ccId):
+        try:
+            parentId = ccId.split("|")[0]
+            ccPath = os.path.join(self.getSearchDirFilePath(), parentId[:1], parentId, ccId + ".cif")
+            logger.info("%s testing path %r", ccId, ccPath)
+            if os.access(ccPath, os.R_OK):
+                return ccPath
+        except Exception:
+            pass
+        return None
+
     def buildSearchFiles(self, **kwargs):
         """Build cif, sdf (optional), and mol2 files for components in the chemical component search index.
            Exclude ions or other extraneous molecules lacking bonds.

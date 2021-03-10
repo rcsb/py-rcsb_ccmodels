@@ -49,7 +49,7 @@ setup(
         "mmcif >= 0.61",
         "rcsb.utils.io >= 0.99",
         "rcsb.utils.multiproc >= 0.18",
-        "rcsb.utils.chem >= 0.61",
+        "rcsb.utils.chem >= 0.64",
         "rcsb.utils.chemref >= 0.66",
         "OpenEye-toolkits>=2020.2.0",
     ],

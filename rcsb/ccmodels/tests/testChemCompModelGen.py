@@ -35,7 +35,7 @@ logger = logging.getLogger()
 
 
 class ChemCompModelGenTests(unittest.TestCase):
-    skipFlag = True
+    skipFlag = False
 
     def setUp(self):
         self.__startTime = time.time()
@@ -75,7 +75,7 @@ class ChemCompModelGenTests(unittest.TestCase):
             minCount=500,
             fpTypeList=None,
             screenTypeList=None,
-            numProc=2,
+            numProc=6,
             useCache=False,
             limitPerceptions=False,
         )
