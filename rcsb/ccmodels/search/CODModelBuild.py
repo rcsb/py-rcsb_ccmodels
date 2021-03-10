@@ -30,7 +30,7 @@ from rcsb.utils.chem.ChemCompMoleculeProvider import ChemCompMoleculeProvider
 from rcsb.utils.chem.ChemCompSearchIndexProvider import ChemCompSearchIndexProvider
 from rcsb.utils.chem.OeAlignUtils import OeAlignUtils
 from rcsb.utils.chem.OeChemCompUtils import OeChemCompUtils
-from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignMultiPage
+from rcsb.utils.chem.OeDepictAlign import OeDepictSubStructureAlignMultiPage
 from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignPage
 from rcsb.utils.chem.OeSearchMoleculeProvider import OeSearchMoleculeProvider
 from rcsb.utils.io.decorators import timeout
@@ -107,8 +107,8 @@ class CODModelBuildWorker(object):
                             continue
                         logger.info("Completed building tautomer %r", targetId)
                     #
-                    matchTitle = "COD Code  " + matchId
-                    ccTitle = "Chemical Component " + targetId
+                    # matchTitle = "COD Code  " + matchId
+                    # ccTitle = "Chemical Component " + targetId
                     parentId = matchD["parentId"]
                     sId = targetId
                     #
@@ -186,9 +186,10 @@ class CODModelBuildWorker(object):
                     # targetId = matchD.getTargetId()
                     parentD.setdefault(parentId, []).append(matchId)
                     #
-                    refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
-                    refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
-                    self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
+                    # refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
+                    # refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
+                    #
+                    # self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
                     # --------- ------------------
                     pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
                     modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=False)
@@ -321,7 +322,7 @@ class CODModelBuildWorker(object):
             logger.exception("%s failing for %r and %r with %s", procName, ccRefObj.getName(), molFitPath, str(e))
         return 0, {}, 0, {}, {}, [], False
 
-    def __pairDepictPage(self, imagePath, refId, refTitle, refMol, fitId, fitTitle, fitMol, alignType="strict"):
+    def __pairDepict(self, imagePath, refId, refTitle, refMol, fitId, fitTitle, fitMol, alignType="strict"):
         """Depict pairwise alignment of the input reference and fit molecules.
 
         Args:
@@ -379,7 +380,7 @@ class CODModelBuildWorker(object):
         aML = []
         try:
             logger.debug("sId %s  pairList (%d)", sId, len(pairList))
-            oed = OeDepictMCSAlignMultiPage()
+            oed = OeDepictSubStructureAlignMultiPage()
             oed.setSearchType(sType=alignType)
             oed.setPairMolList(pairList)
 
