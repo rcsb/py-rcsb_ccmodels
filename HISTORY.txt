@@ -14,3 +14,4 @@
  6-Feb-2021 - V0.21 Fix accession and audit reconciliation with prior model collections
  7-Feb-2021 - V0.22 Adjustments for handling BIRD style identifier and corrections to checking method.
  7-Feb-2021 - V0.23 Adjustments to identifier parsing method in ChemCompModelAssemble()
+ 9-Mar-2021 - V0.24 Add CODModelSearch and CODModelBuild modules

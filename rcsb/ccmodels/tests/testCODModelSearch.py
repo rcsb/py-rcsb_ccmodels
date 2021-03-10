@@ -64,7 +64,7 @@ class CODModelSearchTests(unittest.TestCase):
     def testSearchFilesFull(self):
         csU = CODModelSearch(cachePath=self.__cachePath, ccUrlTarget=self.__ccUrlTarget, birdUrlTarget=self.__birdUrlTarget, numProc=6, useCache=True)
         csU.updateDescriptors()
-        numMols = csU.search(molLimit=5000)
+        numMols = csU.search(molLimit=None)
         self.assertGreaterEqual(numMols, 500)
         numMols = csU.fetchMatchedData(useCache=True)
         self.assertGreaterEqual(numMols, 100)
