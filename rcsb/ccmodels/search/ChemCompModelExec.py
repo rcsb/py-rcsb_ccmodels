@@ -52,6 +52,7 @@ def main():
     parser.add_argument("--build_align_type", default=False, action=None, help="Alignment criteria (default: graph-relaxed-stereo-sdeq")
     #
     parser.add_argument("--search_cod", default=False, action="store_true", help="Execute COD search")
+    parser.add_argument("--fetch_cod", default=False, action="store_true", help="Fetch COD matching data")
     parser.add_argument("--build_cod", default=False, action="store_true", help="Build models from COD search results")
     #
     parser.add_argument("--assemble", default=False, action="store_true", help="Assemble models into a concatenated file")
@@ -92,6 +93,7 @@ def main():
         doBuildCcdc = args.build_ccdc
         #
         doSearchCod = args.search_cod
+        doFetchCod = args.fetch_cod
         doBuildCod = args.build_cod
         #
         doAssemble = args.assemble
@@ -136,8 +138,13 @@ def main():
         if doSearchCod:
             csU = CODModelSearch(cachePath=cachePath, numProc=numProc, useCache=True)
             csU.updateDescriptors()
-            numMols = csU.fetchMatchedDataMp(useCache=True)
+            numMols = csU.search()
             logger.info("Search success count %d", numMols)
+
+        if doFetchCod:
+            csU = CODModelSearch(cachePath=cachePath, numProc=numProc, useCache=True)
+            numMols = csU.fetchMatchedDataMp(useCache=True)
+            logger.info("Fetch success count %d", numMols)
 
         if doBuildCcdc:
             ccmb = ChemCompModelBuild(cachePath=cachePath, prefix=prefix)

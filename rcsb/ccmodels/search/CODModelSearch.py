@@ -38,7 +38,7 @@ class CODModelSearch(object):
         self.__prefix = kwargs.get("prefix", None)
         self.__numProc = kwargs.get("numProc", 4)
         self.__chunkSize = kwargs.get("chunkSize", 50)
-        self.__ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc"
+        self.__ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc-full"
         self.__fU = FileUtil()
         # self.__ccmG = ChemCompModelGen(self.__cachePath, self.__prefix)
 
