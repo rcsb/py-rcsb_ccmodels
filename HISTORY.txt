@@ -18,3 +18,4 @@
 10-Mar-2021 - V0.25 Add multiprocessing methods for fetching COD data and entries
 10-Mar-2021 - V0.26 Add COD functions to ChemCompModelExec().
 10-Mar-2021 - V0.27 Split out COD fetch data from search in ChemCompModelExec().
+10-Mar-2021 - V0.28 Add COD build results to Assemble task, add a timeout() on COD build alignment.

@@ -33,6 +33,7 @@ from rcsb.utils.chem.OeChemCompUtils import OeChemCompUtils
 from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignMultiPage
 from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignPage
 from rcsb.utils.chem.OeSearchMoleculeProvider import OeSearchMoleculeProvider
+from rcsb.utils.io.decorators import timeout
 from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 
@@ -111,16 +112,20 @@ class CODModelBuildWorker(object):
                     parentId = matchD["parentId"]
                     sId = targetId
                     #
-                    nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL, isSkipped = self.__alignModelSubStruct(
-                        targetObj,
-                        fitMolFilePath,
-                        alignType=alignType,
-                        fitTitle=matchId,
-                        refTitle=targetId,
-                        onlyCloseMatches=False,
-                        verbose=self.__verbose,
-                        procName=procName,
-                    )
+                    try:
+                        nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL, isSkipped = self.__alignModelSubStruct(
+                            targetObj,
+                            fitMolFilePath,
+                            alignType=alignType,
+                            fitTitle=matchId,
+                            refTitle=targetId,
+                            onlyCloseMatches=False,
+                            verbose=self.__verbose,
+                            procName=procName,
+                        )
+                    except Exception:
+                        nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL, isSkipped = 0, {}, 0, {}, {}, [], False
+                    #
                     logger.debug(
                         ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
                     )
@@ -260,6 +265,7 @@ class CODModelBuildWorker(object):
             return "tautomer_protomer"
         return ""
 
+    @timeout(120)
     def __alignModelSubStruct(self, ccRefObj, molFitPath, alignType="strict", fitTitle=None, refTitle=None, onlyCloseMatches=False, verbose=False, procName="main"):
         """Align (substructure) chemical component definition search target with the candidate matching reference molecule.
 

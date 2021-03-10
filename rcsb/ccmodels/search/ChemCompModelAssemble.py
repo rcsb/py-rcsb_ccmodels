@@ -25,6 +25,7 @@ from collections import defaultdict
 from operator import itemgetter
 
 from rcsb.ccmodels.search.ChemCompModelBuild import ChemCompModelBuild
+from rcsb.ccmodels.search.CODModelBuild import CODModelBuild
 from rcsb.ccmodels.search import __version__
 from rcsb.utils.chemref.ChemCompModelProvider import ChemCompModelProvider
 from rcsb.utils.io.MarshalUtil import MarshalUtil
@@ -38,7 +39,8 @@ class ChemCompModelAssemble(object):
         self.__prefix = prefix
         self.__urlTarget = urlTarget
         #
-        self.__ccmb = ChemCompModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
+        self.__ccdcmb = ChemCompModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
+        self.__codmb = CODModelBuild(cachePath=self.__cachePath, prefix=self.__prefix)
         # self.__startTime = time.time()
         logger.info("Starting assemble (%s) at %s", __version__, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
 
@@ -56,7 +58,16 @@ class ChemCompModelAssemble(object):
         """
         dataContainerL = []
         mU = MarshalUtil(workPath=self.__cachePath)
-        modelIndexD = self.__ccmb.fetchModelIndex()
+        # combine CCDC and COD model build index files
+        modelIndexD = self.__ccdcmb.fetchModelIndex()
+        codD = self.__codmb.fetchModelIndex()
+        for pId, mDL in modelIndexD.items():
+            if pId in codD:
+                mDL = mDL + codD[pId]
+        for pId, mDL in codD.items():
+            if pId not in modelIndexD:
+                modelIndexD[pId] = codD[pId]
+        #
         modelIndexD = self.__addPriorMatchDetails(modelIndexD)
         modelIndexD = self.__updateVariantDetails(modelIndexD)
         priorMapD = {}
@@ -93,7 +104,7 @@ class ChemCompModelAssemble(object):
         #
         logger.debug("priorMapD %r", priorMapD)
         fn = "chem_comp_models-%s.cif" % self.__getToday()
-        assembleModelPath = os.path.join(self.__ccmb.getModelDirFilePath(), fn)
+        assembleModelPath = os.path.join(self.__ccdcmb.getModelDirFilePath(), fn)
         # -- relabel
         parentModelCountD = defaultdict(int)
         priorIdLD = {}
