@@ -430,7 +430,7 @@ class CODModelBuildWorker(object):
         return None, None
 
     def __makeModelId(self, parentId, modelNum=1):
-        modelId = "T_" + parentId + "_%05d" % modelNum
+        modelId = "Q_" + parentId + "_%05d" % modelNum
         return modelId
 
     def __getToday(self):
