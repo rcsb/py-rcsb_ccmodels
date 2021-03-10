@@ -19,10 +19,10 @@ import logging
 import time
 import os
 
-# from rcsb.ccmodels.search.ChemCompModelGen import ChemCompModelGen
 from rcsb.utils.chem.BatchChemSearch import BatchChemSearch
 from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.io.FileUtil import FileUtil
+from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +173,7 @@ class CODModelSearch(object):
         eSkip = 0
         rcD = {}
         cD = self.__getSearchResults()
+        #
         for ccId, qDL in cD.items():
             # cifPath = self.__ccmG.getChemCompPath(ccId)
             # if not cifPath:
@@ -214,3 +215,113 @@ class CODModelSearch(object):
         ok = self.storeResultIndex(rcD)
         logger.info("Final match result (w/sdf and metadata) (%d/%d) cod hits (%d) skipped (%d)", len(rcD), len(cD), eCount, eSkip)
         return eCount if ok else 0
+
+    def fetchMatchedDataMp(self, numProc=6, chunkSize=5, useCache=True):
+        rcD = {}
+        cD = self.__getSearchResults()
+        idList = list(cD.keys())
+        # ---
+        mpu = MultiProcUtil(verbose=True)
+        mpu.setWorkingDir(self.__cachePath)
+        mpu.setOptions(optionsD={"resultPath": self.__cachePath, "cD": cD, "useCache": useCache})
+        mpu.set(workerObj=self, workerMethod="fetchDataWorker")
+
+        ok, failList, resultList, _ = mpu.runMulti(dataList=idList, numProc=numProc, numResults=1, chunkSize=chunkSize)
+        logger.info("Run ended with status %r success count %d failures %r", ok, len(resultList[0]), len(failList))
+        for rTup in resultList[0]:
+            rcD[rTup[0]] = rTup[1]
+        # ---
+        ok = self.storeResultIndex(rcD)
+        logger.info("Final match result (w/sdf and metadata) (%d/%d)", len(rcD), len(cD))
+        return True
+
+    def fetchDataWorker(self, dataList, procName, optionsD, workingDir):
+        """Worker method to fetch COD data for matched entries
+
+        Args:
+            dataList (list): list of mol2 file paths to be searched
+            procName (str): processName
+            optionsD (dict): dictionary of options
+            workingDir (str): path to working directory (not used)
+
+        Returns:
+            (successList, resultList, []): success and result lists of mol2 paths with CCDC matches
+        """
+        resultPath = optionsD["resultPath"]
+        cD = optionsD["cD"]
+        useCache = optionsD["useCache"]
+        _ = workingDir
+        resultList = []
+        successList = []
+        startTime = time.time()
+        logger.info("starting %s at %s", procName, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
+        #
+        eCount = 0
+        eSkip = 0
+        try:
+            stopPath = os.path.join(resultPath, "STOP")
+            logger.info("%s starting search data length %d", procName, len(dataList))
+            if self.__checkStop(stopPath):
+                logger.info("%s stopping", procName)
+                return resultList, resultList, []
+            #
+            # for ccId, qDL in cD.items():
+            for ccId in dataList:
+                if ccId in cD:
+                    qDL = cD[ccId]
+                #
+                parentId = ccId.split("|")[0]
+                rqDL = []
+                for qD in qDL:
+                    codId = qD["queryId"]
+                    codEntryFilePath = self.__getCodEntryFilePath(codId)
+                    codDetailsFilePath = self.__getCodDetailsFilePath(codId)
+                    ok1 = self.__fetchUrl(self.__getCodEntryUrl(codId), self.__getCodEntryFilePath(codId), useCache=useCache, noRetry=True)
+                    ok2 = self.__fetchUrl(self.__getCodDetailsUrl(codId), self.__getCodDetailsFilePath(codId), useCache=useCache, noRetry=True)
+                    tD = self.getResultDetails(codId)
+                    dD = tD["data"]["attributes"] if "data" in tD and "attributes" in tD["data"] else {}
+                    mD = tD["meta"]["implementation"] if "meta" in tD and "implementation" in tD["meta"] else {}
+                    if ok1 & ok2:
+                        logger.info("Fetched COD entry and details for %s (%r)", codId, ok1 & ok2)
+                        eCount += 1
+                        qD["codEntryFilePath"] = codEntryFilePath
+                        qD["codDetailsFilePath"] = codDetailsFilePath
+                        # qD["cifPath"] = cifPath
+                        qD["parentId"] = parentId
+                        qD["chemicalName"] = dD["_cod_commonname"] if "_cod_commonname" in dD else None
+                        qD["chemicalName"] = dD["_cod_chemname"] if "_cod_chemname" in dD else qD["chemicalName"]
+                        qD["rValue"] = dD["_cod_Robs"] if "_cod_Robs" in dD else None
+                        qD["diffrnTemp"] = dD["_cod_diffrtemp"] if "_cod_diffrtemp" in dD else None
+                        qD["radiationSource"] = dD["_cod_radType"] if "_cod_radType" in dD else None
+                        qD["publicationDOI"] = dD["_cod_doi"] if "_cod_doi" in dD else None
+                        qD["version"] = mD["version"] if "version" in mD else None
+                        qD["hasDisorder"] = "N"
+                        rqDL.append(qD)
+                    else:
+                        logger.info("Skipping entry missing data for %r at %r", codId, self.__getCodEntryUrl(codId))
+                        eSkip += 1
+                if rqDL:
+                    resultList.append((ccId, rqDL))
+                    successList.append(ccId)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+
+        endTime = time.time()
+        logger.info(
+            "%s (entries %d skipped %d) (ccId result length %d) completed at %s (%.2f seconds)",
+            procName,
+            eCount,
+            eSkip,
+            len(successList),
+            time.strftime("%Y %m %d %H:%M:%S", time.localtime()),
+            endTime - startTime,
+        )
+        return successList, resultList, []
+
+    def __checkStop(self, path):
+        try:
+            if os.access(path, os.F_OK):
+                return True
+        except Exception:
+            pass
+        return False
