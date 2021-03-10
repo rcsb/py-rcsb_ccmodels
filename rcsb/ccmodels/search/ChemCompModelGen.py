@@ -77,8 +77,8 @@ class ChemCompModelGen(object):
         quietFlag = kwargs.get("quietFlag", True)
         fpTypeList = kwargs.get("fpTypeList", [])
         screenTypeList = kwargs.get("screenTypeList", [])
-        ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc"
-        oeFileNamePrefix = "oe-%s" % self.__prefix if self.__prefix else "oe"
+        ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc-full"
+        oeFileNamePrefix = "oe-%s" % self.__prefix if self.__prefix else "oe-cc-full"
         numProc = kwargs.get("numProc", 2)
         minCount = kwargs.get("minCount", 0)
         useCache = kwargs.get("useCache", True)
