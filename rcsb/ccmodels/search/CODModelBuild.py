@@ -90,7 +90,7 @@ class CODModelBuildWorker(object):
                 pairList = []
                 matchDList = idxIdD[idxId]
                 #
-                for matchD in matchDList:
+                for ii, matchD in enumerate(matchDList):
                     fitMolFilePath = matchD["codEntryFilePath"]
                     matchId = matchD["queryId"]
                     targetId = matchD["ccId"]
@@ -98,7 +98,7 @@ class CODModelBuildWorker(object):
                     #
                     if not targetObj:
                         oeTargetObj = self.__oesmP.getMol(targetId)
-                        logger.info("Starting building tautomer (%d) %r", oeTargetObj.NumAtoms(), targetId)
+                        logger.info("%s starting building tautomer (num atoms %d) %r (%d/%d)", procName, oeTargetObj.NumAtoms(), targetId, ii+1, len(matchDList))
                         oeccU = OeChemCompUtils()
                         ok = oeccU.addOeMol(targetId, oeTargetObj, missingModelXyz=True, writeIdealXyz=False)
                         cL = oeccU.getContainerList()
@@ -106,7 +106,7 @@ class CODModelBuildWorker(object):
                         if not targetObj:
                             logger.error("%r has null object", targetId)
                             continue
-                        logger.info("Completed building tautomer %r", targetId)
+                        logger.info("%s Completed building tautomer %r", procName, targetId)
                     #
                     # matchTitle = "COD Code  " + matchId
                     # ccTitle = "Chemical Component " + targetId
@@ -227,6 +227,7 @@ class CODModelBuildWorker(object):
                                 "variantType": variantType,
                             }
                         )
+                        logger.info("%s wrote model for %s and %s", procName, target, matchId)
                 #
                 if doFigures and pairList:
                     pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
@@ -299,7 +300,7 @@ class CODModelBuildWorker(object):
             fitAtomUnMappedL = []
             isSkipped = False
             #
-            logger.debug("Align target cc %s with matching model %s", ccRefObj.getName(), molFitPath)
+            logger.info("%s align target cc %s with matching model %s", procName, ccRefObj.getName(), molFitPath)
             oesU = OeAlignUtils(workPath=self.__cachePath, verbose=verbose)
             oesU.setSearchType(sType=alignType)
             nAtomsRef = oesU.setRefObj(ccRefObj, title=refTitle)
