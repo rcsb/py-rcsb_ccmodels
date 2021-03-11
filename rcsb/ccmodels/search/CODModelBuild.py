@@ -76,6 +76,7 @@ class CODModelBuildWorker(object):
             self.__oesmP = optionsD["oesmP"]
             self.__ccmP = optionsD["ccmP"]
             idxIdD = optionsD["idxIdD"]
+            doFigures = optionsD["doFigures"]
             #
             startTime = time.time()
             logger.info("%s ======== ============ ============ ", procName)
@@ -227,7 +228,7 @@ class CODModelBuildWorker(object):
                             }
                         )
                 #
-                if pairList:
+                if doFigures and pairList:
                     pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
                     self.__depictFitList(sId, pdfImagePath, pairList, alignType=alignType)
                 if resultList:
@@ -817,7 +818,7 @@ class CODModelBuild(object):
             ok = False
         return ok
 
-    def build(self, alignType="relaxed-stereo", numProc=4, chunkSize=10, verbose=False):
+    def build(self, alignType="relaxed-stereo", numProc=4, chunkSize=10, verbose=False, doFigures=False):
         """Run the model build step in the chemical component model workflow.
 
         Args:
@@ -832,6 +833,7 @@ class CODModelBuild(object):
         """
         retD = {}
         try:
+            mU = MarshalUtil(workPath=self.__cachePath)
             ccms = CODModelSearch(self.__cachePath, prefix=self.__prefix)
             modelDirPath = self.getModelDirFilePath()
             imageDirPath = self.getModelImageDirFilePath()
@@ -839,6 +841,13 @@ class CODModelBuild(object):
             #
             idxIdD = ccms.getResultIndex()
             idxIdL = list(idxIdD.keys())
+            #
+            midxIdL = []
+            for idxId in idxIdL:
+                pId = idxId.split("|")[0]
+                if mU.exists(os.path.join(modelDirPath, pId)):
+                    continue
+                midxIdL.append(idxId)
             #
             logger.info("Using COD search result index length idxD (%d)", len(idxIdD))
             #
@@ -854,11 +863,12 @@ class CODModelBuild(object):
                     "idxIdD": idxIdD,
                     "oesmP": self.__oesmP,
                     "ccmP": self.__ccmP,
+                    "doFigures": doFigures,
                 }
             )
             #
             mpu.set(workerObj=cmbw, workerMethod="build")
-            ok, failList, resultList, _ = mpu.runMulti(dataList=idxIdL, numProc=numProc, numResults=1, chunkSize=chunkSize)
+            ok, failList, resultList, _ = mpu.runMulti(dataList=midxIdL, numProc=numProc, numResults=1, chunkSize=chunkSize)
             logger.info("Run ended with status %r success count %d failures %r", ok, len(resultList[0]), len(failList))
             successList = copy.copy(resultList[0])
             for tD in successList:
