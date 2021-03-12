@@ -407,7 +407,7 @@ class CODModelBuildWorker(object):
             logger.exception("Failing with %s", str(e))
         return aML
 
-    @timeout(1)
+    @timeout(10)
     def __depictFitList(self, sId, pdfImagePath, pairList, alignType="exact"):
         """Depict pairwise alignments with multi-page layout in PDF format.
 

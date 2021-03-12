@@ -39,7 +39,7 @@ logger.setLevel(logging.INFO)
 
 
 class CODModelBuildTests(unittest.TestCase):
-    abbrevTest = True
+    abbrevTest = False
 
     def setUp(self):
         self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
@@ -75,8 +75,8 @@ class CODModelBuildTests(unittest.TestCase):
         """Test case: model build workflow step"""
         try:
             ccmb = CODModelBuild(cachePath=self.__cachePath, prefix=None)
-            rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=6, chunkSize=5)
-            logger.info("Matched search ids %r", list(rD.keys()))
+            rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=6, chunkSize=2)
+            logger.info("Matched search ids %r", sorted(list(rD.keys())))
             self.assertGreaterEqual(len(rD), 5)
             qD = ccmb.fetchModelIndex()
             self.assertEqual(len(rD), len(qD))
