@@ -18,7 +18,9 @@ __license__ = "Apache 2.0"
 import copy
 import datetime
 import logging
+import platform
 import os
+import resource
 import time
 from collections import namedtuple, defaultdict
 
@@ -33,7 +35,7 @@ from rcsb.utils.chem.OeChemCompUtils import OeChemCompUtils
 from rcsb.utils.chem.OeDepictAlign import OeDepictSubStructureAlignMultiPage
 from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignPage
 from rcsb.utils.chem.OeSearchMoleculeProvider import OeSearchMoleculeProvider
-from rcsb.utils.io.decorators import timeout
+from rcsb.utils.io.decorators import timeout, TimeoutException
 from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 
@@ -44,6 +46,13 @@ AlignAtomMap = namedtuple("AlignAtomMap", "refId refAtIdx refAtNo refAtName fitI
 AlignAtomUnMapped = namedtuple("AlignAtomUnMapped", "fitId fitAtIdx fitAtNo fitAtType fitAtName fitAtFormalCharge x y z fitNeighbors")
 
 
+def logUsage(procName, message, startTime):
+    unitS = "MB" if platform.system() == "Darwin" else "GB"
+    rusageMax = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    deltaTime = time.time() - startTime
+    logger.info("%s %s at %s (%.4f seconds) (%.4f %s)", procName, message, time.strftime("%Y %m %d %H:%M:%S", time.localtime()), deltaTime, rusageMax / 10 ** 6, unitS)
+
+
 class CODModelBuildWorker(object):
     def __init__(self, cachePath, verbose=True):
         self.__cachePath = cachePath
@@ -51,6 +60,21 @@ class CODModelBuildWorker(object):
         self.__ccSIdxP = None
         self.__oesmP = None
         self.__ccmP = None
+
+    def __oeToCc(self, procName, targetId):
+        startTime = time.time()
+        oeTargetObj = self.__oesmP.getMol(targetId)
+        logger.info("%s start building tautomer (num atoms %d) %r", procName, oeTargetObj.NumAtoms(), targetId)
+        oeccU = OeChemCompUtils()
+        ok = oeccU.addOeMol(targetId, oeTargetObj, missingModelXyz=True, writeIdealXyz=False, skipAnnotations=True)
+        cL = oeccU.getContainerList()
+        targetObj = cL[0]
+        logger.info("%s completed building tautomer %r (%r)", procName, targetId, ok)
+        if not targetObj:
+            logger.error("%r built null object for", targetId)
+        logUsage(procName, "completed tautomer build %s" % targetId, startTime)
+        #
+        return targetObj
 
     def build(self, dataList, procName, optionsD, workingDir):
         """Worker method to build chemical component models for the input search result ID list.
@@ -84,35 +108,29 @@ class CODModelBuildWorker(object):
             #
             parentD = {}
             parentModelCountD = defaultdict(int)
-            for idxId in dataList:
-                logger.info("%s start model build for parent Id (%s)", procName, idxId)
+            for targetId in dataList:
+                logger.info("%s start model build for parent Id (%s)", procName, targetId)
                 #
                 pairList = []
-                matchDList = idxIdD[idxId]
+                matchDList = idxIdD[targetId]
+                #
+                targetObj = self.__ccmP.getMol(targetId)
+                if not targetObj:
+                    try:
+                        targetObj = self.__oeToCc(procName, targetId)
+                    except Exception as e:
+                        logger.info("Building chem comp tautomer times out for %s with %s", targetId, str(e))
+                        continue
                 #
                 for ii, matchD in enumerate(matchDList):
                     fitMolFilePath = matchD["codEntryFilePath"]
                     matchId = matchD["queryId"]
-                    targetId = matchD["ccId"]
-                    targetObj = self.__ccmP.getMol(targetId)
-                    #
-                    if not targetObj:
-                        oeTargetObj = self.__oesmP.getMol(targetId)
-                        logger.info("%s starting building tautomer (num atoms %d) %r (%d/%d)", procName, oeTargetObj.NumAtoms(), targetId, ii+1, len(matchDList))
-                        oeccU = OeChemCompUtils()
-                        ok = oeccU.addOeMol(targetId, oeTargetObj, missingModelXyz=True, writeIdealXyz=False)
-                        cL = oeccU.getContainerList()
-                        targetObj = cL[0]
-                        if not targetObj:
-                            logger.error("%r has null object", targetId)
-                            continue
-                        logger.info("%s Completed building tautomer %r", procName, targetId)
-                    #
                     # matchTitle = "COD Code  " + matchId
                     # ccTitle = "Chemical Component " + targetId
                     parentId = matchD["parentId"]
-                    sId = targetId
                     #
+                    startTime = time.time()
+                    logger.info("%s starting alignment for target %s match %s (%d/%d)", procName, targetId, matchId, ii, len(matchDList))
                     try:
                         nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL, isSkipped = self.__alignModelSubStruct(
                             targetObj,
@@ -124,11 +142,20 @@ class CODModelBuildWorker(object):
                             verbose=self.__verbose,
                             procName=procName,
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.info("Alignment fails with %s", str(e))
                         nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL, isSkipped = 0, {}, 0, {}, {}, [], False
                     #
-                    logger.debug(
-                        ">>> %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)", targetId, matchId, nAtomsRef, nAtomsFit, len(fitXyzMapD), len(fitAtomUnMappedL)
+                    logUsage(procName, "completed alignment of %s with %s" % (targetId, matchId), startTime)
+                    logger.info(
+                        "%s %s - %s nAtomsRef %d nAtomsFit %d atommapL (%d) fitAtomUnMappedL (%d)",
+                        procName,
+                        targetId,
+                        matchId,
+                        nAtomsRef,
+                        nAtomsFit,
+                        len(fitXyzMapD),
+                        len(fitAtomUnMappedL),
                     )
                     if nAtomsRef == 0 and nAtomsFit == 0:
                         logger.info("%s alignment fails for %s with %s", procName, targetId, matchId)
@@ -192,7 +219,7 @@ class CODModelBuildWorker(object):
                     #
                     # self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
                     # --------- ------------------
-                    pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
+                    pairList.append((targetId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
                     modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=False)
                     logger.debug("targetId %r modelId %r modelPath %r", targetId, modelId, modelPath)
                     #
@@ -210,7 +237,10 @@ class CODModelBuildWorker(object):
                         len(fitXyzMapD),
                     )
                     #
+                    startTime = time.time()
                     ok, variantType = self.__writeModel(targetId, targetObj, fitFD, fitXyzMapD, fitAtomUnMappedL, matchD, modelId, modelPath)
+                    logUsage(procName, "completed writing model for %s with %s" % (targetId, matchId), startTime)
+                    #
                     if ok:
                         parentModelCountD[parentId] += 1
                         hd = matchD["hasDisorder"]
@@ -227,14 +257,17 @@ class CODModelBuildWorker(object):
                                 "variantType": variantType,
                             }
                         )
-                        logger.info("%s wrote model for %s and %s", procName, target, matchId)
+                        logger.info("%s wrote model for %s and %s", procName, targetId, matchId)
                 #
                 if doFigures and pairList:
-                    pdfImagePath = os.path.join(imageDirPath, sId, sId + "-all-pairs.pdf")
-                    self.__depictFitList(sId, pdfImagePath, pairList, alignType=alignType)
+                    try:
+                        pdfImagePath = os.path.join(imageDirPath, targetId, targetId + "-all-pairs.pdf")
+                        self.__depictFitList(targetId, pdfImagePath, pairList, alignType=alignType)
+                    except Exception as e:
+                        logger.info("Image generation timeout for %s", targetId)
                 if resultList:
                     logger.info("%s built %d models for %s (this iteration)", procName, parentModelCountD[parentId], parentId)
-                    successList.append(idxId)
+                    successList.append(targetId)
                 else:
                     logger.info("%s no models built for %s", procName, targetId)
 
@@ -247,6 +280,12 @@ class CODModelBuildWorker(object):
                 time.strftime("%Y %m %d %H:%M:%S", time.localtime()),
                 endTime - startTime,
             )
+            # Write local index -
+            idxPath = os.path.join(modelDirPath, parentId, "model-index.json")
+            mU = MarshalUtil(workPath=self.__cachePath)
+            ok = mU.doExport(idxPath, resultList, fmt="json")
+            #
+            #
             return successList, resultList, []
         except Exception as e:
             logger.exception("%s failing with %s", procName, str(e))
@@ -268,7 +307,7 @@ class CODModelBuildWorker(object):
             return "tautomer_protomer"
         return ""
 
-    @timeout(60)
+    @timeout(10)
     def __alignModelSubStruct(self, ccRefObj, molFitPath, alignType="strict", fitTitle=None, refTitle=None, onlyCloseMatches=False, verbose=False, procName="main"):
         """Align (substructure) chemical component definition search target with the candidate matching reference molecule.
 
@@ -300,7 +339,7 @@ class CODModelBuildWorker(object):
             fitAtomUnMappedL = []
             isSkipped = False
             #
-            logger.info("%s align target cc %s with matching model %s", procName, ccRefObj.getName(), molFitPath)
+            logger.info("%s align target cc %s with matching model %s", procName, ccRefObj.getName(), fitTitle)
             oesU = OeAlignUtils(workPath=self.__cachePath, verbose=verbose)
             oesU.setSearchType(sType=alignType)
             nAtomsRef = oesU.setRefObj(ccRefObj, title=refTitle)
@@ -368,6 +407,7 @@ class CODModelBuildWorker(object):
             logger.exception("Failing with %s", str(e))
         return aML
 
+    @timeout(1)
     def __depictFitList(self, sId, pdfImagePath, pairList, alignType="exact"):
         """Depict pairwise alignments with multi-page layout in PDF format.
 
@@ -754,6 +794,8 @@ class CODModelBuild(object):
         self.__birdUrlTarget = kwargs.get("birdUrlTarget", None)
         ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc"
         oeFileNamePrefix = "oe-%s" % self.__prefix if self.__prefix else "oe"
+        #
+        self.__startTime = time.time()
         self.__ccmP = ChemCompMoleculeProvider(
             ccUrlTarget=self.__ccUrlTarget, birdUrlTarget=self.__birdUrlTarget, cachePath=cachePath, useCache=useCache, ccFileNamePrefix=ccFileNamePrefix
         )
@@ -783,8 +825,10 @@ class CODModelBuild(object):
             limitPerceptions=limitPerceptions,
         )
         ok3 = self.__oesmP.testCache()
-        self.__startTime = time.time()
+        self.__oesmP.getOeMolD()
+
         logger.info("Completed chemical component search index load %r (%.4f seconds)", ok1 & ok2 & ok3, time.time() - startTime)
+        logUsage("main", "Setup completed", self.__startTime)
         #
         logger.info("Starting model build (%s) at %s", __version__, time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
 
@@ -813,13 +857,13 @@ class CODModelBuild(object):
         try:
             mU = MarshalUtil(workPath=self.__cachePath)
             fp = self.__getModelIndexPath()
-            ok = mU.doExport(fp, mD, fmt="json", indent=3)
+            ok = mU.doExport(fp, sorted(mD), fmt="json", indent=3)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             ok = False
         return ok
 
-    def build(self, alignType="relaxed-stereo", numProc=4, chunkSize=10, verbose=False, doFigures=False):
+    def build(self, alignType="relaxed-stereo", numProc=4, chunkSize=10, verbose=False, doFigures=True):
         """Run the model build step in the chemical component model workflow.
 
         Args:
@@ -838,7 +882,6 @@ class CODModelBuild(object):
             ccms = CODModelSearch(self.__cachePath, prefix=self.__prefix)
             modelDirPath = self.getModelDirFilePath()
             imageDirPath = self.getModelImageDirFilePath()
-
             #
             idxIdD = ccms.getResultIndex()
             idxIdL = list(idxIdD.keys())
@@ -846,11 +889,11 @@ class CODModelBuild(object):
             midxIdL = []
             for idxId in idxIdL:
                 pId = idxId.split("|")[0]
-                if mU.exists(os.path.join(modelDirPath, pId)):
+                if mU.exists(os.path.join(modelDirPath, pId, "model-index.json")):
                     continue
                 midxIdL.append(idxId)
             #
-            logger.info("Using COD search result index length idxD (%d)", len(idxIdD))
+            logger.info("Starting build using (%d) of a total of results length (%d)", len(midxIdL), len(idxIdD))
             #
             cmbw = CODModelBuildWorker(self.__cachePath, verbose=verbose)
             mpu = MultiProcUtil(verbose=True)
@@ -872,13 +915,24 @@ class CODModelBuild(object):
             ok, failList, resultList, _ = mpu.runMulti(dataList=midxIdL, numProc=numProc, numResults=1, chunkSize=chunkSize)
             logger.info("Run ended with status %r success count %d failures %r", ok, len(resultList[0]), len(failList))
             successList = copy.copy(resultList[0])
-            for tD in successList:
-                retD.setdefault(tD["parentId"], []).append(tD)
             #
-            if retD:
-                logger.info("Completed build with models for %d parent chemical definitions", len(retD))
+            if successList:
+                logger.info("Completed build with %d models ", len(successList))
             else:
                 logger.info("No models built")
+            #
+            # Build full index -
+            #
+            logger.info("Building full model index")
+            for idxId in idxIdL:
+                pId = idxId.split("|")[0]
+                fp = os.path.join(modelDirPath, pId, "model-index.json")
+                if mU.exists(fp):
+                    tDL = mU.doImport(fp, fmt="json")
+                    for tD in tDL:
+                        retD.setdefault(tD["parentId"], []).append(tD)
+            #
+            logger.info("Storing models for %d parent components", len(retD))
             ok = self.storeModelIndex(retD)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
