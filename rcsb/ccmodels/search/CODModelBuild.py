@@ -271,6 +271,11 @@ class CODModelBuildWorker(object):
                 else:
                     logger.info("%s no models built for %s", procName, targetId)
 
+                # Write local index -
+                idxPath = os.path.join(modelDirPath, parentId, "model-index.json")
+                mU = MarshalUtil(workPath=self.__cachePath)
+                ok = mU.doExport(idxPath, resultList, fmt="json")
+                #
             endTime = time.time()
             logger.info(
                 "%s (match successes %d total models this iterations %d) completed at %s (%.2f seconds)",
@@ -280,11 +285,6 @@ class CODModelBuildWorker(object):
                 time.strftime("%Y %m %d %H:%M:%S", time.localtime()),
                 endTime - startTime,
             )
-            # Write local index -
-            idxPath = os.path.join(modelDirPath, parentId, "model-index.json")
-            mU = MarshalUtil(workPath=self.__cachePath)
-            ok = mU.doExport(idxPath, resultList, fmt="json")
-            #
             #
             return successList, resultList, []
         except Exception as e:
@@ -438,7 +438,7 @@ class CODModelBuildWorker(object):
                 highLightMatchColorRef="green",
                 highLightNotMatchColorRef="pink",
             )
-            aML = oed.alignPairListMulti(imagePath=pdfImagePath)
+            aML = oed.alignPairListMulti(imagePath=pdfImagePath, maxMatches=1)
             logger.debug("%s atom map length (%d)", sId, len(aML))
             if aML:
                 for (rCC, rAt, tCC, tAt) in aML:
