@@ -20,3 +20,4 @@
 10-Mar-2021 - V0.27 Split out COD fetch data from search in ChemCompModelExec().
 10-Mar-2021 - V0.28 Add COD build results to Assemble task, add a timeout() on COD build alignment.
 11-Mar-2021 - V0.29 Further additions of timeouts and data flow for COD build workflow.
+12-Mar-2021 - V0.30 Add constraint on the maximum number matches in doAlignSS().

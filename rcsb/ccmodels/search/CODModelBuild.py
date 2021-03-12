@@ -347,7 +347,7 @@ class CODModelBuildWorker(object):
             if onlyCloseMatches and nAtomsFit > nAtomsRef and nAtomsFit - nAtomsRef > 2:
                 isSkipped = True
                 return nAtomsRef, refFD, nAtomsFit, fitFD, atomMapD, fitAtomUnMappedL, isSkipped
-            (nAtomsRef, refFD, nAtomsFit, fitFD, atomMapL, fitAtomUnMappedL) = oesU.doAlignSs(unique=False)
+            (nAtomsRef, refFD, nAtomsFit, fitFD, atomMapL, fitAtomUnMappedL) = oesU.doAlignSs(unique=True, maxMatches=1)
             # -----
             # tD = {refAtName: fitAtIdx, ...}
             tD = {tup.refAtName: tup.fitAtIdx for tup in atomMapL}
