@@ -863,7 +863,7 @@ class CODModelBuild(object):
         try:
             mU = MarshalUtil(workPath=self.__cachePath)
             fp = self.__getModelIndexPath()
-            ok = mU.doExport(fp, sorted(mD), fmt="json", indent=3)
+            ok = mU.doExport(fp, mD, fmt="json", indent=3)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
             ok = False
@@ -938,14 +938,14 @@ class CODModelBuild(object):
             # Build full index -
             #
             logger.info("Building full model index")
-            for idxId in idxIdL:
-                pId = idxId.split("|")[0]
+            for pId in idxIdL:
                 fp = os.path.join(modelDirPath, pId, "model-index.json")
                 if mU.exists(fp):
                     tDL = mU.doImport(fp, fmt="json")
                     for tD in tDL:
                         retD.setdefault(tD["parentId"], []).append(tD)
             #
+            retD = dict(sorted(retD.items()))
             logger.info("Storing models for %d parent components", len(retD))
             ok = self.storeModelIndex(retD)
         except Exception as e:
