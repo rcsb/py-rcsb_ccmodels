@@ -25,13 +25,12 @@ from rcsb.ccmodels.search.ChemCompModelSearch import ChemCompModelSearch
 from rcsb.ccmodels.search.CODModelBuild import CODModelBuild
 from rcsb.ccmodels.search.CODModelSearch import CODModelSearch
 
-# from rcsb.utils.io.MarshalUtil import MarshalUtil
-
 HERE = os.path.abspath(os.path.dirname(__file__))
 TOPDIR = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s]-%(module)s.%(funcName)s: %(message)s")
 logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 def main():
