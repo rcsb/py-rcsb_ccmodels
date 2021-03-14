@@ -61,11 +61,10 @@ class ChemCompModelAssemble(object):
         # combine CCDC and COD model build index files
         modelIndexD = self.__ccdcmb.fetchModelIndex()
         codD = self.__codmb.fetchModelIndex()
-        for pId, mDL in modelIndexD.items():
-            if pId in codD:
-                mDL = mDL + codD[pId]
         for pId, mDL in codD.items():
-            if pId not in modelIndexD:
+            if pId in modelIndexD:
+                modelIndexD[pId] += codD[pId]
+            else:
                 modelIndexD[pId] = codD[pId]
         #
         modelIndexD = self.__addPriorMatchDetails(modelIndexD)
