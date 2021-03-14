@@ -74,7 +74,7 @@ class CODModelBuildTests(unittest.TestCase):
     def testBuildWorkflow(self):
         """Test case: model build workflow step"""
         try:
-            ccmb = CODModelBuild(cachePath=self.__cachePath, prefix=None)
+            ccmb = CODModelBuild(cachePath=self.__cachePath, prefix=None, timeOut=5.0)
             rD = ccmb.build(alignType="graph-relaxed-stereo-sdeq", numProc=6, chunkSize=2)
             logger.info("Matched search ids %r", sorted(list(rD.keys())))
             self.assertGreaterEqual(len(rD), 5)

@@ -49,9 +49,10 @@ setup(
         "mmcif >= 0.61",
         "rcsb.utils.io >= 1.01",
         "rcsb.utils.multiproc >= 0.18",
-        "rcsb.utils.chem >= 0.68",
+        "rcsb.utils.chem >= 0.70",
         "rcsb.utils.chemref >= 0.66",
         "OpenEye-toolkits>=2020.2.0",
+        "wrapt_timeout_decorator >= 1.3.1",
     ],
     packages=find_packages(exclude=["rcsb.mock-data", "rcsb.utils.tests-chem", "rcsb.utils.tests-*", "tests.*"]),
     package_data={

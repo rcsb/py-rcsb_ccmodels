@@ -23,6 +23,7 @@ import os
 import resource
 import time
 from collections import namedtuple, defaultdict
+from wrapt_timeout_decorator import timeout
 
 from mmcif.api.DataCategory import DataCategory
 from mmcif.api.PdbxContainers import DataContainer
@@ -35,7 +36,6 @@ from rcsb.utils.chem.OeChemCompUtils import OeChemCompUtils
 from rcsb.utils.chem.OeDepictAlign import OeDepictSubStructureAlignMultiPage
 from rcsb.utils.chem.OeDepictAlign import OeDepictMCSAlignPage
 from rcsb.utils.chem.OeSearchMoleculeProvider import OeSearchMoleculeProvider
-from rcsb.utils.io.decorators import timeout, TimeoutException
 from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 
@@ -54,13 +54,15 @@ def logUsage(procName, message, startTime):
 
 
 class CODModelBuildWorker(object):
-    def __init__(self, cachePath, verbose=True):
+    def __init__(self, cachePath, timeOut=None, verbose=True):
         self.__cachePath = cachePath
         self.__verbose = verbose
         self.__ccSIdxP = None
         self.__oesmP = None
         self.__ccmP = None
+        self.timeOut = timeOut
 
+    @timeout("instance.timeOut", use_signals=False, dec_allow_eval=True)
     def __oeToCc(self, procName, targetId):
         startTime = time.time()
         oeTargetObj = self.__oesmP.getMol(targetId)
@@ -106,28 +108,29 @@ class CODModelBuildWorker(object):
             logger.info("%s ======== ============ ============ ", procName)
             logger.info("%s starting with length %d at %s", procName, len(dataList), time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
             #
-            parentD = {}
             parentModelCountD = defaultdict(int)
-            for targetId in dataList:
-                logger.info("%s start model build for parent Id (%s)", procName, targetId)
+            for parentId in dataList:
+                matchDList = idxIdD[parentId]
+                logger.info("%s start model build for parent Id (%s) (%d)", procName, parentId, len(matchDList))
                 #
                 pairList = []
-                matchDList = idxIdD[targetId]
-                #
-                targetObj = self.__ccmP.getMol(targetId)
-                if not targetObj:
-                    try:
-                        targetObj = self.__oeToCc(procName, targetId)
-                    except Exception as e:
-                        logger.info("Building chem comp tautomer times out for %s with %s", targetId, str(e))
-                        continue
-                #
+                localResultList = []
+                targetCache = {}
                 for ii, matchD in enumerate(matchDList):
+                    targetId = matchD["ccId"]
+                    targetObj = self.__ccmP.getMol(targetId)
+                    targetObj = targetCache[targetId] if targetId in targetCache else targetObj
+                    if not targetObj:
+                        try:
+                            targetObj = self.__oeToCc(procName, targetId)
+                        except Exception as e:
+                            logger.info("%s building fails for %s with %s", procName, targetId, str(e))
+                            continue
+                    #
                     fitMolFilePath = matchD["codEntryFilePath"]
                     matchId = matchD["queryId"]
                     # matchTitle = "COD Code  " + matchId
                     # ccTitle = "Chemical Component " + targetId
-                    parentId = matchD["parentId"]
                     #
                     startTime = time.time()
                     logger.info("%s starting alignment for target %s match %s (%d/%d)", procName, targetId, matchId, ii, len(matchDList))
@@ -143,8 +146,9 @@ class CODModelBuildWorker(object):
                             procName=procName,
                         )
                     except Exception as e:
-                        logger.info("Alignment fails with %s", str(e))
+                        logger.info("%s alignment fails for target %r and %r with %s", procName, targetId, matchId, str(e))
                         nAtomsRef, refFD, nAtomsFit, fitFD, fitXyzMapD, fitAtomUnMappedL, isSkipped = 0, {}, 0, {}, {}, [], False
+                        continue
                     #
                     logUsage(procName, "completed alignment of %s with %s" % (targetId, matchId), startTime)
                     logger.info(
@@ -212,7 +216,6 @@ class CODModelBuildWorker(object):
                     # --------- ----------------
                     # matchId = matchD.getIdentifier()
                     # targetId = matchD.getTargetId()
-                    parentD.setdefault(parentId, []).append(matchId)
                     #
                     # refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
                     # refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
@@ -239,12 +242,12 @@ class CODModelBuildWorker(object):
                     #
                     startTime = time.time()
                     ok, variantType = self.__writeModel(targetId, targetObj, fitFD, fitXyzMapD, fitAtomUnMappedL, matchD, modelId, modelPath)
-                    logUsage(procName, "completed writing model for %s with %s" % (targetId, matchId), startTime)
+                    logUsage(procName, "completed writing model for %s (%r) with %s" % (targetId, ok, matchId), startTime)
                     #
                     if ok:
                         parentModelCountD[parentId] += 1
                         hd = matchD["hasDisorder"]
-                        resultList.append(
+                        localResultList.append(
                             {
                                 "modelId": modelId,
                                 "searchId": targetId,
@@ -264,17 +267,19 @@ class CODModelBuildWorker(object):
                         pdfImagePath = os.path.join(imageDirPath, targetId, targetId + "-all-pairs.pdf")
                         self.__depictFitList(targetId, pdfImagePath, pairList, alignType=alignType)
                     except Exception as e:
-                        logger.info("Image generation timeout for %s", targetId)
-                if resultList:
+                        logger.info("%s image failed for %s with %s", procName, targetId, str(e))
+                if localResultList:
                     logger.info("%s built %d models for %s (this iteration)", procName, parentModelCountD[parentId], parentId)
                     successList.append(targetId)
+                    resultList.extend(localResultList)
                 else:
                     logger.info("%s no models built for %s", procName, targetId)
 
                 # Write local index -
                 idxPath = os.path.join(modelDirPath, parentId, "model-index.json")
                 mU = MarshalUtil(workPath=self.__cachePath)
-                ok = mU.doExport(idxPath, resultList, fmt="json")
+                ok = mU.doExport(idxPath, localResultList, fmt="json")
+                logger.info("%s wrote local index (%r) for %s: (%d)", procName, ok, parentId, len(localResultList))
                 #
             endTime = time.time()
             logger.info(
@@ -307,7 +312,7 @@ class CODModelBuildWorker(object):
             return "tautomer_protomer"
         return ""
 
-    @timeout(10)
+    @timeout("instance.timeOut", use_signals=False, dec_allow_eval=True)
     def __alignModelSubStruct(self, ccRefObj, molFitPath, alignType="strict", fitTitle=None, refTitle=None, onlyCloseMatches=False, verbose=False, procName="main"):
         """Align (substructure) chemical component definition search target with the candidate matching reference molecule.
 
@@ -407,7 +412,7 @@ class CODModelBuildWorker(object):
             logger.exception("Failing with %s", str(e))
         return aML
 
-    @timeout(10)
+    @timeout("instance.timeOut", use_signals=False, dec_allow_eval=True)
     def __depictFitList(self, sId, pdfImagePath, pairList, alignType="exact"):
         """Depict pairwise alignments with multi-page layout in PDF format.
 
@@ -790,6 +795,7 @@ class CODModelBuild(object):
         self.__prefix = prefix
         startTime = time.time()
         useCache = True
+        self.__timeOut = kwargs.get("timeOut", None)
         self.__ccUrlTarget = kwargs.get("ccUrlTarget", None)
         self.__birdUrlTarget = kwargs.get("birdUrlTarget", None)
         ccFileNamePrefix = "cc-%s" % self.__prefix if self.__prefix else "cc"
@@ -883,19 +889,27 @@ class CODModelBuild(object):
             modelDirPath = self.getModelDirFilePath()
             imageDirPath = self.getModelImageDirFilePath()
             #
-            idxIdD = ccms.getResultIndex()
-            idxIdL = list(idxIdD.keys())
-            #
-            midxIdL = []
-            for idxId in idxIdL:
+            tD = ccms.getResultIndex()
+            # Make parent index ---
+            idxIdD = {}
+            for idxId, iDL in tD.items():
                 pId = idxId.split("|")[0]
-                if mU.exists(os.path.join(modelDirPath, pId, "model-index.json")):
-                    continue
-                midxIdL.append(idxId)
+                idxIdD.setdefault(pId, []).extend(iDL)
             #
-            logger.info("Starting build using (%d) of a total of results length (%d)", len(midxIdL), len(idxIdD))
+            idxIdL = list(idxIdD.keys())
+            midxIdL = []
+            for pId in idxIdL:
+                fp = os.path.join(modelDirPath, pId, "model-index.json")
+                if mU.exists(fp):
+                    # Skip empty indices
+                    fst = os.stat(fp)
+                    if fst.st_size > 10:
+                        continue
+                midxIdL.append(pId)
             #
-            cmbw = CODModelBuildWorker(self.__cachePath, verbose=verbose)
+            logger.info("Starting COD model build using (%d) from a total of results length (%d)", len(midxIdL), len(idxIdD))
+            #
+            cmbw = CODModelBuildWorker(self.__cachePath, verbose=verbose, timeOut=self.__timeOut)
             mpu = MultiProcUtil(verbose=True)
             mpu.setWorkingDir(modelDirPath)
             mpu.setOptions(

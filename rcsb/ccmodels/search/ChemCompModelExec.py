@@ -54,6 +54,7 @@ def main():
     parser.add_argument("--search_cod", default=False, action="store_true", help="Execute COD search")
     parser.add_argument("--fetch_cod", default=False, action="store_true", help="Fetch COD matching data")
     parser.add_argument("--build_cod", default=False, action="store_true", help="Build models from COD search results")
+    parser.add_argument("--build_cod_timeout", default=None, help="COD build time out (seconds) (Default None)")
     #
     parser.add_argument("--assemble", default=False, action="store_true", help="Assemble models into a concatenated file")
     parser.add_argument("--max_r_factor", default=10.0, help="Maximum permissible R-value in assembled model file (default=10.0)")
@@ -95,6 +96,7 @@ def main():
         doSearchCod = args.search_cod
         doFetchCod = args.fetch_cod
         doBuildCod = args.build_cod
+        codBuildTimeOut = args.build_cod_timeout
         #
         doAssemble = args.assemble
         maxRFactor = args.max_r_factor
@@ -152,7 +154,7 @@ def main():
             logger.info("Built model count %d", len(rD))
 
         if doBuildCod:
-            ccmb = CODModelBuild(cachePath=cachePath, prefix=prefix)
+            ccmb = CODModelBuild(cachePath=cachePath, prefix=prefix, timeOut=codBuildTimeOut)
             rD = ccmb.build(alignType=alignType, numProc=numProc, chunkSize=chunkSize)
             logger.info("Built model count %d", len(rD))
 

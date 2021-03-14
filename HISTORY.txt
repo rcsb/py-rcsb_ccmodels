@@ -22,3 +22,4 @@
 11-Mar-2021 - V0.29 Further additions of timeouts and data flow for COD build workflow.
 12-Mar-2021 - V0.30 Add constraint on the maximum number of substructure matches in doAlignSS().
 12-Mar-2021 - V0.31 Add constraint on the maximum number of substructure matches for OeDepictSubStructureAlignMultiPage().
+13-Mar-2021 - V0.32 Refactor CODModelBuild(), change over to multiprocess based timeouts
