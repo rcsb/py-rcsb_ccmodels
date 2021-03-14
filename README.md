@@ -1,7 +1,7 @@
 # py-rcsb_ccmodels
 
 Utilities for building structural models for RCSB Chemical Component definitions using
-small molecule crystal structures in the CCDC.
+small molecule crystal structures in the CCDC and COD.
 
 ## Introduction
 
@@ -16,6 +16,12 @@ The latter dependencies require licenses and separate installation that is descr
 with the CCDC documentation.  The 2021 version of the CCDC API is supported only in Python 3.7
 and the RCSB wrapper module provides a CLI that helps to isolate the current module
 from this particular version requirement.
+
+The Crystallographic Open Database (COD) provides a batch download of SMILES descriptors
+that are seached against the Chemical Component Search database.  Metadata with experimental
+descriptions and SDF files containing COD entry coordinates are downloaded for matching entries.
+These data are used to build Chemical Component Model files that are integrated with model files
+generated from matching CCDC entries.
 
 ### Installation
 
@@ -96,16 +102,17 @@ python ChemCompModelExec.py --help
    -or-
 cc_models_cli --help
 
-usage: cc_models_cli [-h] [--generate] [--cc_locator CC_LOCATOR] [--bird_locator BIRD_LOCATOR]
-                     [--prefix PREFIX] [--cache_path CACHE_PATH] [--use_cache]
-                     [--limit_perceptions] [--search] [--update_only] [--build] [--build_align_type BUILD_ALIGN_TYPE] [--assemble] [--max_r_factor MAX_R_FACTOR]
-                     [--csdhome CSDHOME] [--python_lib_path PYTHON_LIB_PATH]
-                     [--python_version PYTHON_VERSION] [--num_proc NUM_PROC] [--chunk_size CHUNK_SIZE]
-                     [--verbose]
+usage: ChemCompModelExec.py [-h] [--generate_ccdc]
+              [--cc_locator CC_LOCATOR] [--bird_locator BIRD_LOCATOR] [--prefix PREFIX]
+              [--cache_path CACHE_PATH] [--use_cache] [--limit_perceptions] [--search_ccdc] [--update_only]
+              [--build_ccdc] [--build_align_type BUILD_ALIGN_TYPE] [--search_cod] [--fetch_cod] [--build_cod]
+              [--build_cod_timeout BUILD_COD_TIMEOUT] [--assemble] [--max_r_factor MAX_R_FACTOR]
+              [--csdhome CSDHOME] [--python_lib_path PYTHON_LIB_PATH] [--python_version PYTHON_VERSION]
+              [--num_proc NUM_PROC] [--chunk_size CHUNK_SIZE] [--search_timeout SEARCH_TIMEOUT] [--verbose]
 
 optional arguments:
   -h, --help            show this help message and exit
-  --generate            Generate searchable files
+  --generate_ccdc       Generate CCDC searchable files
   --cc_locator CC_LOCATOR
                         Chemical component reference dictioanary locator
   --bird_locator BIRD_LOCATOR
@@ -115,14 +122,19 @@ optional arguments:
                         Top-level cache directory path
   --use_cache           Re-use cached resource files
   --limit_perceptions   Restrict automatic OE chemical perceptions
-  --search              Execute CCDC search
+  --search_ccdc         Execute CCDC search
   --update_only         Only update current search results
-  --build               Build models from CCDC search results
+  --build_ccdc          Build models from CCDC search results
   --build_align_type BUILD_ALIGN_TYPE
-                        Alignment criteria (default: graph-relaxed-stereo
+                        Alignment criteria (default: graph-relaxed-stereo-sdeq
+  --search_cod          Execute COD search
+  --fetch_cod           Fetch COD matching data
+  --build_cod           Build models from COD search results
+  --build_cod_timeout BUILD_COD_TIMEOUT
+                        COD build time out (seconds) (Default None)
   --assemble            Assemble models into a concatenated file
   --max_r_factor MAX_R_FACTOR
-                        Maximum permissible R-value (default=10.0)
+                        Maximum permissible R-value in assembled model file (default=10.0)
   --csdhome CSDHOME     Path to the CSD release (path to CSD_202x)
   --python_lib_path PYTHON_LIB_PATH
                         Path to Python library
@@ -131,6 +143,8 @@ optional arguments:
   --num_proc NUM_PROC   Number of processes to execute (default=2)
   --chunk_size CHUNK_SIZE
                         Number of files loaded per process
+  --search_timeout SEARCH_TIMEOUT
+                        Search timeout (seconds) default=240
   --verbose             Verbose output
 __________________________________________________
 ```
@@ -151,7 +165,17 @@ cc_models_cli --search --num_proc 4 --cache_path ./CACHE
 #
 echo "Begin build workflow"
 cc_models_cli --build --num_proc 4 --cache_path ./CACHE --build_align_type graph-relaxed-stereo-sdeq
-
+#
+echo "Begin COD search workflow"
+cc_models_cli --search_cod --num_proc 12 --chunk_size 10 --cache_path ./CACHE
+#
+echo "Begin COD fetch data workflow"
+cc_models_cli --fetch_cod --num_proc 12 --chunk_size 10 --cache_path ./CACHE
+#
+echo "Begin build workflow"
+cc_models_cli --build_cod --num_proc 8 --chunk_size 20 --cache_path ./CACHE \
+              --build_align_type graph-relaxed-stereo-sdeq --build_cod_timeout 120.0
+#
 echo "Begin assemble workflow"
 cc_models_cli --assemble --min_r_factor 10.0  --cache_path ./CACHE
 ```
