@@ -72,8 +72,10 @@ class ChemCompModelAssemble(object):
         modelIndexD = self.__updateVariantDetails(modelIndexD)
         priorMapD = {}
         for _, mDL in modelIndexD.items():
-            mDLS = sorted(mDL, key=itemgetter("priorModelId", "variantType", "rFactor"), reverse=False)
-
+            try:
+                mDLS = sorted(mDL, key=itemgetter("priorModelId", "variantType", "rFactor"), reverse=False)
+            except Exception:
+                mDLS = sorted(mDL, key=itemgetter("priorModelId", "variantType"), reverse=False)
             numStd = 0
             matchIdD = {}
             for mD in mDLS:
@@ -82,7 +84,7 @@ class ChemCompModelAssemble(object):
                     numStd += 1
                     isStd = True
                 #
-                if mD["rFactor"] > maxRFactor:
+                if "rFactor" in mD and mD["rFactor"] and mD["rFactor"] > maxRFactor:
                     logger.info("Skipping model %s isStd (%r) rValue (%r)", mD["modelId"], isStd, mD["rFactor"])
                     continue
                 if numStd and not isStd:
