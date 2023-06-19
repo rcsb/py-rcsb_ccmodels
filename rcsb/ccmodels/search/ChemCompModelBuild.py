@@ -165,7 +165,9 @@ class ChemCompModelBuildWorker(object):
                     #
                     refImageFileName = "ref_" + targetId + "_" + matchId + ".svg"
                     refImagePath = os.path.join(imageDirPath, sId, refImageFileName)
-                    self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
+                    # self.__pairDepictPage(refImagePath, sId, ccTitle, refFD["OEMOL"], matchId, matchTitle, fitFD["OEMOL"], alignType=alignType)
+                    # 2023-04-30 CS commented out self.__pairDepictPage process that is produce images for paired match
+                    # which will fail on ligand CB5 on unmatched hydrogens. This process is not necessary for CSD-CCD match
                     # --------- ------------------
                     pairList.append((sId, refFD["OEMOL"], matchId, fitFD["OEMOL"]))
                     modelId, modelPath = self.__makeModelPath(modelDirPath, parentId, targetId, startingModelNum=parentModelCountD[parentId] + 1, maxModels=300, scanExisting=False)
@@ -371,7 +373,7 @@ class ChemCompModelBuildWorker(object):
         """
         aML = []
         try:
-            oed = OeDepictMCSAlignPage()
+            oed = OeDepictMCSAlignPage(timeOut=10)
             oed.setSearchType(sType=alignType)
 
             oed.setRefMol(refMol, refId, title=refTitle)
@@ -410,7 +412,7 @@ class ChemCompModelBuildWorker(object):
         aML = []
         try:
             logger.debug("sId %s  pairList (%d)", sId, len(pairList))
-            oed = OeDepictMCSAlignMultiPage()
+            oed = OeDepictMCSAlignMultiPage(timeOut=30)
             oed.setSearchType(sType=alignType)
             oed.setPairMolList(pairList)
 
