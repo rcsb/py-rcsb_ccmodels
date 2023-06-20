@@ -24,3 +24,4 @@
 12-Mar-2021 - V0.31 Add constraint on the maximum number of substructure matches for OeDepictSubStructureAlignMultiPage().
 13-Mar-2021 - V0.32 Refactor CODModelBuild(), change over to multiprocess based timeouts
 14-Mar-2021 - V0.33 Adjustments for assembling COD and CCDC data
+20-Jun-2023 - V0.34 Update PYROOT setting, timeOut setting, and env setup file, add example run file
